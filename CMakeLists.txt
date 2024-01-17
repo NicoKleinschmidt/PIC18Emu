@@ -18,6 +18,7 @@ add_executable(default-test-project
     src/ccp.cpp
     src/adc.cpp
     src/port.cpp
+    src/eusart.cpp
     src/environment.cpp)
 
 if(MSVC)

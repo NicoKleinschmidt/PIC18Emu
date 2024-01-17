@@ -9,6 +9,7 @@
 #include "adc.hpp"
 #include "ccp.hpp"
 #include "cpu.hpp"
+#include "eusart.hpp"
 #include "gpio.hpp"
 #include "int.hpp"
 #include "mem.hpp"
@@ -397,6 +398,28 @@ int main()
         reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR1, reg_pir1_mask_ADIF, set);
     };
 
+    eusart_ctx_t eusart1;
+    eusart_ctx_t eusart2;
+    eusart_initialize(eusart1);
+    eusart_initialize(eusart2);
+
+    eusart1.mode_change = [&]() { std::cout << "EUSART1: mode changed, baud=" << eusart1.baud_rate; };
+    eusart2.mode_change = [&]() { std::cout << "EUSART2: mode changed, baud=" << eusart2.baud_rate; };
+    eusart1.transmit = [](uint8_t data, bool _) { std::cout << static_cast<char>(data); };
+    eusart2.transmit = [](uint8_t data, bool _) { std::cout << static_cast<char>(data); };
+    eusart1.rx_interrupt = [&](bool set) {
+        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR1, reg_pir1_mask_RC1IF, set);
+    };
+    eusart2.rx_interrupt = [&](bool set) {
+        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR3, reg_pir3_mask_RC2IF, set);
+    };
+    eusart1.tx_interrupt = [&](bool set) {
+        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR1, reg_pir1_mask_TX1IF, set);
+    };
+    eusart2.tx_interrupt = [&](bool set) {
+        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR3, reg_pir3_mask_TX2IF, set);
+    };
+
     auto ccpx_special_event_tigger = [&](uint8_t timer_num, uint8_t ccp_num) {
         if (timer_num == 1)
             timer1_special_event_trigger(timer1);
@@ -524,6 +547,10 @@ int main()
         value |= result.data & result.mask;
         result = ccp_bus_read(ccp5, addr);
         value |= result.data & result.mask;
+        result = eusart_bus_read(eusart1, addr);
+        value |= result.data & result.mask;
+        result = eusart_bus_read(eusart2, addr);
+        value |= result.data & result.mask;
         result = mem_read(sram, addr);
         value |= result.data & result.mask;
 
@@ -570,6 +597,8 @@ int main()
         ccp_bus_write(ccp3, addr, val);
         ccp_bus_write(ccp4, addr, val);
         ccp_bus_write(ccp5, addr, val);
+        eusart_bus_write(eusart1, addr, val);
+        eusart_bus_write(eusart2, addr, val);
         mem_write(sram, addr, val);
     };
 
