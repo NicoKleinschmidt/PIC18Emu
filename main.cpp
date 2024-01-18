@@ -9,6 +9,7 @@
 #include "adc.hpp"
 #include "ccp.hpp"
 #include "cpu.hpp"
+#include "environment.hpp"
 #include "eusart.hpp"
 #include "gpio.hpp"
 #include "int.hpp"
@@ -36,8 +37,15 @@ static void sig_handler(int s)
         signal_handler(s);
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    if (argc < 2)
+    {
+        std::cerr << "Usage: pic18 program.bin";
+        return 1;
+    }
+    std::string program_file_name = argv[1];
+
     cpu_t cpu;
 
     memory_t<0x600> sram = {
@@ -49,16 +57,14 @@ int main()
     sfr_phy_map_t<sfr_count> registers;
     registers.first_address = 0xE41;
     std::vector<uint16_t> physical_regs{
-        static_cast<uint16_t>(pic18f66k80_sfr_map::WREG),   static_cast<uint16_t>(pic18f66k80_sfr_map::STATUS),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::BSR),    static_cast<uint16_t>(pic18f66k80_sfr_map::FSR0L),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR0H),  static_cast<uint16_t>(pic18f66k80_sfr_map::FSR1L),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR1H),  static_cast<uint16_t>(pic18f66k80_sfr_map::FSR2L),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR2H),  static_cast<uint16_t>(pic18f66k80_sfr_map::PCL),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::PCLATH), static_cast<uint16_t>(pic18f66k80_sfr_map::PCLATU),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::TOSL),   static_cast<uint16_t>(pic18f66k80_sfr_map::TOSH),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::TOSU),   static_cast<uint16_t>(pic18f66k80_sfr_map::STKPTR),
+        static_cast<uint16_t>(pic18f66k80_sfr_map::WREG),  static_cast<uint16_t>(pic18f66k80_sfr_map::STATUS),
+        static_cast<uint16_t>(pic18f66k80_sfr_map::BSR),   static_cast<uint16_t>(pic18f66k80_sfr_map::FSR0L),
+        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR0H), static_cast<uint16_t>(pic18f66k80_sfr_map::FSR1L),
+        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR1H), static_cast<uint16_t>(pic18f66k80_sfr_map::FSR2L),
+        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR2H),
     };
     registers.implemented_registers = sfr_phy_implemented_regs<sfr_count>(0xE41, physical_regs);
+    sfr_phy_reset(registers, reg_reset_type_t::power_on_reset);
 
     auto program_mem = std::make_unique<std::array<uint8_t, 32768>>();
 
@@ -405,8 +411,8 @@ int main()
 
     eusart1.mode_change = [&]() { std::cout << "EUSART1: mode changed, baud=" << eusart1.baud_rate; };
     eusart2.mode_change = [&]() { std::cout << "EUSART2: mode changed, baud=" << eusart2.baud_rate; };
-    eusart1.transmit = [](uint8_t data, bool _) { std::cout << static_cast<char>(data); };
-    eusart2.transmit = [](uint8_t data, bool _) { std::cout << static_cast<char>(data); };
+    eusart1.transmit = [](uint8_t data, bool) { std::cout << static_cast<char>(data); };
+    eusart2.transmit = [](uint8_t data, bool) { std::cout << static_cast<char>(data); };
     eusart1.rx_interrupt = [&](bool set) {
         reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR1, reg_pir1_mask_RC1IF, set);
     };
@@ -493,6 +499,8 @@ int main()
         addr_read_result_t result;
         uint8_t value = 0;
 
+        result = cpu_bus_read(cpu, pic18fxx2_cpu_regs, addr);
+        value |= result.data & result.mask;
         result = reg_sfr_bus_read(ctx, addr);
         value |= result.data & result.mask;
         result = int_addr_space_read_18f66k80(int_state, pic18f66k80_int_regs, addr);
@@ -554,6 +562,7 @@ int main()
         result = mem_read(sram, addr);
         value |= result.data & result.mask;
 
+        env_bus_read(addr, value);
         return value;
     };
 
@@ -570,6 +579,7 @@ int main()
             .last_address = 0xFFF,
         };
 
+        cpu_bus_write(cpu, pic18fxx2_cpu_regs, addr, val);
         reg_sfr_bus_write(ctx, addr, val);
         int_addr_space_write_18f66k80(int_state, pic18f66k80_int_regs, addr, val);
         gpio_bus_write(gpioa, addr, val);
@@ -600,6 +610,8 @@ int main()
         eusart_bus_write(eusart1, addr, val);
         eusart_bus_write(eusart2, addr, val);
         mem_write(sram, addr, val);
+
+        env_bus_write(addr, val);
     };
 
     auto read_prog_bus = [&](uint32_t addr) -> uint8_t {
@@ -617,11 +629,11 @@ int main()
     };
 
     auto interrupt_vector = [&](bool high_priority) {
-        cpu_interrupt_vector(cpu, pic18fxx2_cpu_regs, read_prog_bus, read_data_bus, write_data_bus, high_priority);
+        cpu_interrupt_vector(cpu, pic18fxx2_cpu_regs, read_data_bus, read_prog_bus, high_priority);
     };
 
     std::ifstream program_file;
-    program_file.open("program.bin", std::ios_base::binary);
+    program_file.open(program_file_name, std::ios_base::binary);
     if (!program_file)
     {
         std::cout << "program file not found";
@@ -633,7 +645,7 @@ int main()
         (*program_mem)[i] = program_file.get();
     }
 
-    cpu_reset_por(cpu, read_data_bus, write_data_bus);
+    cpu_reset_por(cpu);
 
     bool stop = false;
     bool sleep = false;
@@ -694,7 +706,8 @@ int main()
     std::array<double, 10> adc_channels;
     adc_channels.fill(0);
 
-    auto nop_analog = [&](uint8_t pin, double value) {};
+    auto nop_analog = [](uint8_t, double) {};
+
     portc.on_analog_input_changed = nop_analog;
     portd.on_analog_input_changed = nop_analog;
     portf.on_analog_input_changed = nop_analog;
@@ -760,7 +773,7 @@ int main()
     };
 
     auto por_reset = [&]() {
-        cpu_reset_por(cpu, read_data_bus, write_data_bus);
+        cpu_reset_por(cpu);
         int_state_reset_18f66k80(int_state);
         timer0_reset(timer0);
         timer1_reset(timer1);
@@ -779,6 +792,8 @@ int main()
 
     signal(SIGINT, sig_handler);
     signal_handler = [&](int) { stop = true; };
+
+    env_init();
 
     std::cout << "Clock start\n";
 

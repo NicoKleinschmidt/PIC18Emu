@@ -13,8 +13,24 @@ const char *instruction_names[] = {
     "ADDLW",   "ANDLW",  "IORLW",   "LFSR",   "MOVLB",  "MOVLW", "MULLW",  "SUBLW",  "XORLW",  "TBLRD",
     "TBLWT",   "ADDFSR", "ADDULNK", "CALLW",  "MOVSF",  "MOVSS", "PUSHL",  "SUBFSR", "SUBULNK"};
 
+void env_init()
+{
+}
+
 void env_cpu_current_instruction(decode_result_t instruction, uint32_t pc)
 {
-    std::cout << "CPU: 0x" << std::setfill('0') << std::setw(4) << std::hex << pc << "  "
+    std::cerr << "CPU: 0x" << std::setfill('0') << std::setw(8) << std::hex << pc << "  "
               << instruction_names[static_cast<int>(instruction.opcode)] << "\n";
+}
+
+void env_bus_write(uint16_t address, uint8_t val)
+{
+    std::cerr << "_W: 0x" << std::setfill('0') << std::setw(4) << std::hex << address << " <- 0x" << std::setw(2)
+              << std::hex << static_cast<int>(val) << "\n";
+}
+
+void env_bus_read(uint16_t address, uint8_t val)
+{
+    std::cerr << "R_: 0x" << std::setfill('0') << std::setw(4) << std::hex << address << " -> 0x" << std::setw(2)
+              << std::hex << static_cast<int>(val) << "\n";
 }

@@ -78,23 +78,12 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
               bus_writer_t<uint32_t, uint8_t> write_prog_bus, bus_reader_t<uint16_t, uint8_t> read_data_bus,
               bus_writer_t<uint16_t, uint8_t> write_data_bus, std::function<void(cpu_event_t e)> event_handler)
 {
-    // Get the current value of common registers, will be written back
-    // once the instruction has been executed.
-    uint8_t status = read_data_bus(static_cast<uint16_t>(sfr.STATUS));
-    uint8_t w = read_data_bus(static_cast<uint16_t>(sfr.WREG));
-    uint32_t pc = cpu_read_pc(sfr, read_data_bus);
-
     decode_result_t decoded = cpu_decode(cpu.fetched_instruction);
     instruction_t instruction = decoded.instruction;
 
-    uint8_t fetched_low = read_prog_bus(pc++);
-    uint8_t fetched_high = read_prog_bus(pc++);
+    uint8_t fetched_low = read_prog_bus(cpu.pc++);
+    uint8_t fetched_high = read_prog_bus(cpu.pc++);
     cpu.fetched_instruction = (static_cast<uint16_t>(fetched_high) << 8) | fetched_low;
-
-    // Decode the next instruction for debugging.
-    decode_result_t debug_next_instruction = cpu_decode(cpu.fetched_instruction);
-
-    bool xinst_enabled = reg_check_configuration_bit(reg_configuration_bit_t::XINST, read_prog_bus);
 
     if (cpu.next_action != nullptr)
     {
@@ -107,7 +96,17 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         return;
     }
 
-    env_cpu_current_instruction(decoded, pc);
+    env_cpu_current_instruction(decoded, cpu.pc);
+
+    // Get the current value of common registers, will be written back
+    // once the instruction has been executed.
+    uint8_t status = read_data_bus(static_cast<uint16_t>(sfr.STATUS));
+    uint8_t w = read_data_bus(static_cast<uint16_t>(sfr.WREG));
+
+    // Decode the next instruction for debugging.
+    decode_result_t debug_next_instruction = cpu_decode(cpu.fetched_instruction);
+
+    bool xinst_enabled = reg_check_configuration_bit(reg_configuration_bit_t::XINST, read_prog_bus);
 
     if (decoded.opcode == opcode_t::ILLEGAL)
     {
@@ -140,8 +139,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         if (instruction.xinst_fsr.f == 3)
         {
             w = instruction.literal.k;
-            pc = cpu_stack_top(cpu, sfr, read_data_bus);
-            if (!cpu_stack_pop(cpu, sfr, read_prog_bus, read_data_bus, write_data_bus))
+            cpu.pc = cpu_stack_top(cpu);
+            if (!cpu_stack_pop(cpu, read_prog_bus))
                 return;
 
             cpu.fetched_instruction = 0x0000; // NOP
@@ -199,7 +198,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     case opcode_t::BC: {
         if (status & alu_status_C)
         {
-            pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
+            cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
             cpu.fetched_instruction = 0x0000; // NOP
         }
         break;
@@ -216,7 +215,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     case opcode_t::BN: {
         if (status & alu_status_N)
         {
-            pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
+            cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
             cpu.fetched_instruction = 0x0000; // NOP
         }
         break;
@@ -225,7 +224,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     case opcode_t::BNC: {
         if (!(status & alu_status_C))
         {
-            pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
+            cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
             cpu.fetched_instruction = 0x0000; // NOP
         }
         break;
@@ -234,7 +233,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     case opcode_t::BNN: {
         if (!(status & alu_status_N))
         {
-            pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
+            cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
             cpu.fetched_instruction = 0x0000; // NOP
         }
         break;
@@ -243,7 +242,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     case opcode_t::BNOV: {
         if (!(status & alu_status_OV))
         {
-            pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
+            cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
             cpu.fetched_instruction = 0x0000; // NOP
         }
         break;
@@ -252,7 +251,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     case opcode_t::BNZ: {
         if (!(status & alu_status_Z))
         {
-            pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
+            cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
             cpu.fetched_instruction = 0x0000; // NOP
         }
         break;
@@ -260,7 +259,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::BRA: {
         int16_t offset = from_2s_complement_11(instruction.control_branch.literal) * 2;
-        pc += offset - 2;
+        cpu.pc += offset - 2;
         cpu.fetched_instruction = 0x0000; // NOP
         break;
     }
@@ -304,7 +303,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     case opcode_t::BOV: {
         if (status & alu_status_OV)
         {
-            pc += from_2s_complement_8(instruction.control_branch_status.literal * 2);
+            cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal * 2);
             cpu.fetched_instruction = 0x0000; // NOP
         }
         break;
@@ -313,22 +312,22 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     case opcode_t::BZ: {
         if (status & alu_status_Z)
         {
-            pc += from_2s_complement_8(instruction.control_branch_status.literal * 2);
+            cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal * 2);
             cpu.fetched_instruction = 0x0000; // NOP
         }
         break;
     }
 
     case opcode_t::CALL: {
-        if (!cpu_stack_push(cpu, sfr, pc, read_prog_bus, read_data_bus, write_data_bus))
+        if (!cpu_stack_push(cpu, cpu.pc, read_prog_bus))
         {
             return;
         }
 
         instruction_t next_instruction = *reinterpret_cast<instruction_t *>(&cpu.fetched_instruction);
-        pc = (static_cast<uint32_t>(next_instruction.control_call_low.literal << 8) |
-              static_cast<uint32_t>(instruction.control_call_high.literal))
-             << 1;
+        cpu.pc = (static_cast<uint32_t>(next_instruction.control_call_low.literal << 8) |
+                  static_cast<uint32_t>(instruction.control_call_high.literal))
+                 << 1;
 
         if (instruction.control_call_high.s)
         {
@@ -345,11 +344,11 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         if (!xinst_enabled)
             break;
 
-        if (!cpu_stack_push(cpu, sfr, pc, read_prog_bus, read_data_bus, write_data_bus))
+        if (!cpu_stack_push(cpu, cpu.pc, read_prog_bus))
             return;
 
-        pc &= ~0xFF;
-        pc |= w;
+        cpu.pc &= ~0xFF;
+        cpu.pc |= w;
 
         cpu.fetched_instruction = 0x0000; // NOP
         break;
@@ -467,7 +466,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         uint32_t address = ((static_cast<uint32_t>(next_instruction.control_goto_low.literal) << 8) |
                             instruction.control_goto_high.literal)
                            << 1;
-        pc = address;
+        cpu.pc = address;
         break;
     }
 
@@ -544,7 +543,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             fsrl_offset = static_cast<uint16_t>(sfr.FSR2L);
 
         write_data_bus(fsrl_offset + 1, instruction.load_fsr_high.k);
-        cpu.next_action = [fsrl_offset, write_data_bus](cpu_t &cpu, instruction_t next_instruction) {
+        cpu.next_action = [fsrl_offset, write_data_bus](cpu_t &, instruction_t next_instruction) {
             write_data_bus(fsrl_offset, next_instruction.load_fsr_low.k);
         };
         break;
@@ -570,8 +569,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::MOVFF: {
         uint8_t val = read_data_bus(instruction.byte_to_byte_high.f_source);
-        pc -= 2;
-        cpu.next_action = [val, write_data_bus, sfr](cpu_t &cpu, instruction_t &instruction) {
+        cpu.pc -= 2;
+        cpu.next_action = [val, write_data_bus, sfr](cpu_t &, instruction_t &instruction) {
             uint16_t dest = instruction.byte_to_byte_low.f_dest;
             if (dest == static_cast<uint16_t>(sfr.PCL) || dest == static_cast<uint16_t>(sfr.TOSU) ||
                 dest == static_cast<uint16_t>(sfr.TOSH) || dest == static_cast<uint16_t>(sfr.TOSL))
@@ -602,7 +601,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         uint8_t fsr2h = read_data_bus(sfr.FSR2L + 1);
         uint16_t fsr2_val = (static_cast<uint16_t>(fsr2h) << 8) | static_cast<uint16_t>(fsr2l);
         uint8_t src_value = read_data_bus(fsr2_val + instruction.xinst_movsf_high_movss.z);
-        cpu.next_action = [src_value, write_data_bus](cpu_t &cpu, instruction_t &instruction) {
+        cpu.next_action = [src_value, write_data_bus](cpu_t &, instruction_t &instruction) {
             write_data_bus(instruction.xinst_movsf_low.f, src_value);
         };
 
@@ -617,7 +616,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         uint8_t fsr2h = read_data_bus(sfr.FSR2L + 1);
         uint16_t fsr2_val = (static_cast<uint16_t>(fsr2h) << 8) | static_cast<uint16_t>(fsr2l);
         uint8_t src_value = read_data_bus(fsr2_val + instruction.xinst_movsf_high_movss.z);
-        cpu.next_action = [src_value, read_data_bus, write_data_bus, sfr](cpu_t &cpu, instruction_t &instruction) {
+        cpu.next_action = [src_value, read_data_bus, write_data_bus, sfr](cpu_t &, instruction_t &instruction) {
             uint8_t fsr2l = read_data_bus(sfr.FSR2L);
             uint8_t fsr2h = read_data_bus(sfr.FSR2L + 1);
             uint16_t fsr2_val = (static_cast<uint16_t>(fsr2h) << 8) | static_cast<uint16_t>(fsr2l);
@@ -663,12 +662,12 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::POP: {
-        cpu_stack_pop(cpu, sfr, read_prog_bus, read_data_bus, write_data_bus);
+        cpu_stack_pop(cpu, read_prog_bus);
         break;
     }
 
     case opcode_t::PUSH: {
-        if (!cpu_stack_push(cpu, sfr, pc, read_prog_bus, read_data_bus, write_data_bus))
+        if (!cpu_stack_push(cpu, cpu.pc, read_prog_bus))
         {
             return;
         }
@@ -691,24 +690,24 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::RCALL: {
-        if (!cpu_stack_push(cpu, sfr, pc, read_prog_bus, read_data_bus, write_data_bus))
+        if (!cpu_stack_push(cpu, cpu.pc, read_prog_bus))
         {
             return;
         }
 
-        pc += 2 + from_2s_complement_11(instruction.control_branch.literal) * 2;
+        cpu.pc += 2 + from_2s_complement_11(instruction.control_branch.literal) * 2;
         cpu.fetched_instruction = 0xFFFF; // NOP
         break;
     }
 
     case opcode_t::RESET: {
-        cpu_reset_mclr(cpu, read_data_bus, write_data_bus);
+        cpu_reset_mclr(cpu);
         break;
     }
 
     case opcode_t::RETFIE: {
-        pc = cpu_stack_top(cpu, sfr, read_data_bus);
-        if (!cpu_stack_pop(cpu, sfr, read_prog_bus, read_data_bus, write_data_bus))
+        cpu.pc = cpu_stack_top(cpu);
+        if (!cpu_stack_pop(cpu, read_prog_bus))
             return;
 
         if (cpu.is_high_priority_interrupt)
@@ -729,8 +728,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::RETLW: {
         w = instruction.literal.k;
-        pc = cpu_stack_top(cpu, sfr, read_data_bus);
-        if (!cpu_stack_pop(cpu, sfr, read_prog_bus, read_data_bus, write_data_bus))
+        cpu.pc = cpu_stack_top(cpu);
+        if (!cpu_stack_pop(cpu, read_prog_bus))
             return;
 
         cpu.fetched_instruction = 0x0000; // NOP
@@ -738,8 +737,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::RETURN: {
-        pc = cpu_stack_top(cpu, sfr, read_data_bus);
-        if (!cpu_stack_pop(cpu, sfr, read_prog_bus, read_data_bus, write_data_bus))
+        cpu.pc = cpu_stack_top(cpu);
+        if (!cpu_stack_pop(cpu, read_prog_bus))
             return;
 
         if (instruction.control_return.s)
@@ -838,8 +837,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         if (instruction.xinst_fsr.f == 3)
         {
             w = instruction.literal.k;
-            pc = cpu_stack_top(cpu, sfr, read_data_bus);
-            if (!cpu_stack_pop(cpu, sfr, read_prog_bus, read_data_bus, write_data_bus))
+            cpu.pc = cpu_stack_top(cpu);
+            if (!cpu_stack_pop(cpu, read_prog_bus))
                 return;
 
             cpu.fetched_instruction = 0x0000; // NOP
@@ -929,7 +928,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             write_data_bus(static_cast<uint16_t>(sfr.TBLPTRL), tblptrl);
         }
         // Wait one tick
-        pc -= 2;
+        cpu.pc -= 2;
         cpu.next_action = [](cpu_t &, instruction_t &) {};
         break;
     }
@@ -962,7 +961,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             write_data_bus(static_cast<uint16_t>(sfr.TBLPTRL), tblptrl);
         }
         // Wait one tick
-        pc -= 2;
+        cpu.pc -= 2;
         cpu.next_action = [](cpu_t &, instruction_t &) {};
         break;
     }
@@ -998,17 +997,20 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     write_data_bus(static_cast<uint16_t>(sfr.STATUS), status);
     write_data_bus(static_cast<uint16_t>(sfr.WREG), w);
-    cpu_write_pc(sfr, write_data_bus, pc);
 }
 
-void cpu_reset_por(cpu_t &cpu, bus_reader_t<uint16_t, uint8_t> read_data_bus,
-                   bus_writer_t<uint16_t, uint8_t> write_data_bus)
+void cpu_reset_por(cpu_t &cpu)
 {
     cpu.fetched_instruction = 0;
+    cpu.pc = 0;
+    cpu.pclath = 0;
+    cpu.pclatu = 0;
+    cpu.stkptr = 0;
+    cpu.stkful = false;
+    cpu.stkunf = false;
 }
 
-void cpu_reset_mclr(cpu_t &cpu, bus_reader_t<uint16_t, uint8_t> read_data_bus,
-                    bus_writer_t<uint16_t, uint8_t> write_data_bus)
+void cpu_reset_mclr(cpu_t &cpu)
 {
 }
 
@@ -1177,45 +1179,32 @@ decode_result_t cpu_decode(uint16_t instruction)
     };
 }
 
-bool cpu_stack_push(cpu_t &cpu, const cpu_known_sfrs_t &sfr, uint32_t value,
-                    bus_reader_t<uint32_t, uint8_t> read_prog_bus, bus_reader_t<uint16_t, uint8_t> read_data_bus,
-                    bus_writer_t<uint16_t, uint8_t> write_data_bus)
+bool cpu_stack_push(cpu_t &cpu, uint32_t value, bus_reader_t<uint32_t, uint8_t> read_prog_bus)
 {
-    uint8_t stkptr_reg = read_data_bus(static_cast<uint16_t>(sfr.STKPTR));
-    uint8_t stkptr = stkptr_reg & reg_stkptr_mask_SP;
-
-    if (stkptr == cpu.hw_stack.size())
+    if (cpu.stkptr == cpu.hw_stack.size())
     {
-        // Stack is already full, set STKOVF and ignore push.
-        stkptr_reg |= reg_stkptr_mask_STKOVF;
-        write_data_bus(static_cast<uint16_t>(sfr.STKPTR), stkptr_reg);
+        // Stack is already full, set STKFUL and ignore push.
+        cpu.stkful = true;
         return false;
     }
 
-    stkptr++;
-    stkptr_reg &= ~reg_stkptr_mask_SP;
-    stkptr_reg |= stkptr;
-
-    if (stkptr == cpu.hw_stack.size())
+    cpu.stkptr++;
+    if (cpu.stkptr == cpu.hw_stack.size())
     {
         // Stack became full
-        stkptr_reg |= reg_stkptr_mask_STKOVF;
+        cpu.stkful = true;
     }
 
-    cpu.hw_stack[stkptr - 1] = value;
-    write_data_bus(static_cast<uint16_t>(sfr.TOSU), (value >> 16) & 0xFF);
-    write_data_bus(static_cast<uint16_t>(sfr.TOSH), (value >> 8) & 0xFF);
-    write_data_bus(static_cast<uint16_t>(sfr.TOSL), value & 0xFF);
-    write_data_bus(static_cast<uint16_t>(sfr.STKPTR), stkptr_reg);
+    cpu.hw_stack[cpu.stkptr - 1] = value;
 
-    if (stkptr == cpu.hw_stack.size())
+    if (cpu.stkful)
     {
         // Check if the cpu should be reset because stack became full.
         bool reset_on_full = reg_check_configuration_bit(reg_configuration_bit_t::STVREN, read_prog_bus);
 
         if (reset_on_full)
         {
-            cpu_reset_mclr(cpu, read_data_bus, write_data_bus);
+            cpu_reset_mclr(cpu);
             return false;
         }
     }
@@ -1223,22 +1212,17 @@ bool cpu_stack_push(cpu_t &cpu, const cpu_known_sfrs_t &sfr, uint32_t value,
     return true;
 }
 
-bool cpu_stack_pop(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, uint8_t> read_prog_bus,
-                   bus_reader_t<uint16_t, uint8_t> read_data_bus, bus_writer_t<uint16_t, uint8_t> write_data_bus)
+bool cpu_stack_pop(cpu_t &cpu, bus_reader_t<uint32_t, uint8_t> read_prog_bus)
 {
-    uint8_t stkptr_reg = read_data_bus(static_cast<uint16_t>(sfr.STKPTR));
-    uint8_t stkptr = stkptr_reg & reg_stkptr_mask_SP;
-
-    if (stkptr == 0)
+    if (cpu.stkptr == 0)
     {
-        stkptr_reg |= reg_stkptr_mask_STKUNF;
-        write_data_bus(static_cast<uint16_t>(sfr.STKPTR), stkptr_reg);
+        cpu.stkunf = true;
 
         bool reset_on_underflow = reg_check_configuration_bit(reg_configuration_bit_t::STVREN, read_prog_bus);
 
         if (reset_on_underflow)
         {
-            cpu_reset_mclr(cpu, read_data_bus, write_data_bus);
+            cpu_reset_mclr(cpu);
             return false;
         }
         else
@@ -1247,53 +1231,122 @@ bool cpu_stack_pop(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_
         }
     }
 
-    uint32_t tos;
-    stkptr--;
-
-    if (stkptr == 0)
-        tos = 0;
-    else
-        tos = cpu.hw_stack[stkptr - 1];
-
-    write_data_bus(static_cast<uint16_t>(sfr.TOSU), (tos >> 16) & 0xFF);
-    write_data_bus(static_cast<uint16_t>(sfr.TOSH), (tos >> 8) & 0xFF);
-    write_data_bus(static_cast<uint16_t>(sfr.TOSL), tos & 0xFF);
-
-    stkptr_reg &= ~reg_stkptr_mask_SP;
-    stkptr_reg |= stkptr;
-
-    write_data_bus(static_cast<uint16_t>(sfr.STKPTR), stkptr_reg);
-
+    cpu.stkptr--;
     return true;
 }
 
-uint32_t cpu_stack_top(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint16_t, uint8_t> read_data_bus)
+uint32_t cpu_stack_top(cpu_t &cpu)
 {
-    uint8_t stkptr = read_data_bus(static_cast<uint16_t>(sfr.STKPTR)) & reg_stkptr_mask_SP;
-
-    if (stkptr == 0)
+    if (cpu.stkptr == 0)
         return 0;
 
-    return cpu.hw_stack[stkptr - 1];
+    return cpu.hw_stack[cpu.stkptr - 1];
 }
 
-void cpu_interrupt_vector(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, uint8_t> read_prog_bus,
-                          bus_reader_t<uint16_t, uint8_t> read_data_bus, bus_writer_t<uint16_t, uint8_t> write_data_bus,
-                          bool high_priority)
+void cpu_stack_top_set(cpu_t &cpu, uint32_t val)
+{
+    if (cpu.stkptr == 0)
+        return;
+
+    cpu.hw_stack[cpu.stkptr - 1] = val;
+}
+
+void cpu_interrupt_vector(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint16_t, uint8_t> read_data_bus,
+                          bus_reader_t<uint32_t, uint8_t> read_prog_bus, bool high_priority)
 {
     cpu.ws = read_data_bus(static_cast<uint16_t>(sfr.WREG));
     cpu.statuss = read_data_bus(static_cast<uint16_t>(sfr.STATUS));
     cpu.bsrs = read_data_bus(static_cast<uint16_t>(sfr.BSR));
     cpu.is_high_priority_interrupt = high_priority;
 
-    uint32_t pc = cpu_read_pc(sfr, read_data_bus);
-    if (!cpu_stack_push(cpu, sfr, pc, read_prog_bus, read_data_bus, write_data_bus))
+    if (!cpu_stack_push(cpu, cpu.pc, read_prog_bus))
         return;
 
     uint32_t int_vector = high_priority ? 0x8 : 0x18;
 
     cpu.fetched_instruction = 0x0000; // NOP
-    cpu_write_pc(sfr, write_data_bus, int_vector);
+    cpu.pc = int_vector;
+}
+
+addr_read_result_t cpu_bus_read(cpu_t &cpu, const cpu_known_sfrs_t &regs, uint16_t address)
+{
+    if (address == regs.PCL)
+    {
+        cpu.pclatu = (cpu.pc >> 16) & 0xFF;
+        cpu.pclath = (cpu.pc >> 8) & 0xFF;
+        uint8_t pcl = static_cast<uint8_t>(cpu.pc & 0xFF);
+
+        return addr_read_result_t{.data = pcl, .mask = 0xFF};
+    }
+    else if (address == regs.PCLATH)
+    {
+        return addr_read_result_t{.data = cpu.pclath, .mask = 0xFF};
+    }
+    else if (address == regs.PCLATU)
+    {
+        return addr_read_result_t{.data = cpu.pclatu, .mask = 0xFF};
+    }
+    else if (address == regs.STKPTR)
+    {
+        return addr_read_result_t{.data = static_cast<uint8_t>((static_cast<uint8_t>(cpu.stkful) << 7) |
+                                                               (static_cast<uint8_t>(cpu.stkunf) << 6) |
+                                                               (cpu.stkptr & 0x1F)),
+                                  .mask = 0xFF};
+    }
+    else if (address == regs.TOSL)
+    {
+        return addr_read_result_t{.data = static_cast<uint8_t>(cpu_stack_top(cpu) & 0xFF), .mask = 0xFF};
+    }
+    else if (address == regs.TOSH)
+    {
+        return addr_read_result_t{.data = static_cast<uint8_t>((cpu_stack_top(cpu) >> 8) & 0xFF), .mask = 0xFF};
+    }
+    else if (address == regs.TOSU)
+    {
+        return addr_read_result_t{.data = static_cast<uint8_t>((cpu_stack_top(cpu) >> 16) & 0xFF), .mask = 0xFF};
+    }
+
+    return addr_read_result_none;
+}
+
+addr_bit_mask_t cpu_bus_write(cpu_t &cpu, const cpu_known_sfrs_t &regs, uint16_t address, uint8_t value)
+{
+    if (address == regs.PCL)
+    {
+        cpu.pc = (static_cast<uint32_t>(cpu.pclatu) << 16) | (static_cast<uint32_t>(cpu.pclath) << 8) |
+                 static_cast<uint32_t>(value);
+    }
+    else if (address == regs.PCLATH)
+    {
+        cpu.pclath = value;
+        return 0xFF;
+    }
+    else if (address == regs.PCLATU)
+    {
+        cpu.pclatu = value;
+        return 0xFF;
+    }
+    else if (address == regs.STKPTR)
+    {
+        cpu.stkful = value & (1 << 7);
+        cpu.stkunf = value & (1 << 6);
+        cpu.stkptr = value & 0x1F;
+        return 0xDF;
+    }
+    else if (address == regs.TOSL)
+    {
+        cpu_stack_top_set(cpu, (cpu_stack_top(cpu) & 0xFFFF00) | value);
+    }
+    else if (address == regs.TOSH)
+    {
+        cpu_stack_top_set(cpu, (cpu_stack_top(cpu) & 0xFF00FF) | (value << 8));
+    }
+    else if (address == regs.TOSU)
+    {
+        cpu_stack_top_set(cpu, (cpu_stack_top(cpu) & 0x00FFFF) | (value << 16));
+    }
+
+    return 0x00;
 }
 
 uint32_t cpu_read_pc(const cpu_known_sfrs_t &sfr, bus_reader_t<uint16_t, uint8_t> read_data_bus)

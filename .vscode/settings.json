@@ -78,5 +78,9 @@
         "variant": "cpp",
         "__nullptr": "cpp",
         "__string": "cpp"
+    },
+    "cmake.debugConfig": {
+        "args": ["program.bin"],
+        "cwd": "${workspaceFolder}"
     }
 }

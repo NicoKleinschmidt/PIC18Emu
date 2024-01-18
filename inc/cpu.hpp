@@ -207,6 +207,15 @@ struct cpu_t
     std::function<void(cpu_t &cpu, instruction_t &instruction)> next_action;
 
     std::array<uint32_t, 31> hw_stack;
+    uint8_t stkptr;
+    bool stkful;
+    bool stkunf;
+
+    uint32_t pc;
+    uint8_t pclath;
+    uint8_t pclatu;
+
+    // Shadow registers
     uint8_t ws;
     uint8_t statuss;
     uint8_t bsrs;
@@ -262,22 +271,17 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &regs, bus_reader_t<uint32_t, u
               bus_writer_t<uint32_t, uint8_t> write_prog_bus, bus_reader_t<uint16_t, uint8_t> read_data_bus,
               bus_writer_t<uint16_t, uint8_t> write_data_bus, std::function<void(cpu_event_t e)> event_handler);
 
-void cpu_reset_por(cpu_t &cpu, bus_reader_t<uint16_t, uint8_t> read_data_bus,
-                   bus_writer_t<uint16_t, uint8_t> write_data_bus);
+void cpu_reset_por(cpu_t &cpu);
 
-void cpu_reset_mclr(cpu_t &cpu, bus_reader_t<uint16_t, uint8_t> read_data_bus,
-                    bus_writer_t<uint16_t, uint8_t> write_data_bus);
+void cpu_reset_mclr(cpu_t &cpu);
 
 decode_result_t cpu_decode(uint16_t instruction);
 
-bool cpu_stack_push(cpu_t &cpu, const cpu_known_sfrs_t &regs, uint32_t value,
-                    bus_reader_t<uint32_t, uint8_t> read_prog_bus, bus_reader_t<uint16_t, uint8_t> read_data_bus,
-                    bus_writer_t<uint16_t, uint8_t> write_data_bus);
+bool cpu_stack_push(cpu_t &cpu, uint32_t value, bus_reader_t<uint32_t, uint8_t> read_prog_bus);
 
-bool cpu_stack_pop(cpu_t &cpu, const cpu_known_sfrs_t &regs, bus_reader_t<uint32_t, uint8_t> read_prog_bus,
-                   bus_reader_t<uint16_t, uint8_t> read_data_bus, bus_writer_t<uint16_t, uint8_t> write_data_bus);
+bool cpu_stack_pop(cpu_t &cpu, bus_reader_t<uint32_t, uint8_t> read_prog_bus);
 
-uint32_t cpu_stack_top(cpu_t &cpu, const cpu_known_sfrs_t &regs, bus_reader_t<uint16_t, uint8_t> read_data_bus);
+uint32_t cpu_stack_top(cpu_t &cpu);
 
 /// @brief Causes the cpu to vector to the specifed address.
 ///        The return address is pushed onto the stack
@@ -288,11 +292,10 @@ uint32_t cpu_stack_top(cpu_t &cpu, const cpu_known_sfrs_t &regs, bus_reader_t<ui
 /// @param read_data_bus
 /// @param write_data_bus
 /// @param high_priority Wether or not a high priority interrupt was requested.
-void cpu_interrupt_vector(cpu_t &cpu, const cpu_known_sfrs_t &regs, bus_reader_t<uint32_t, uint8_t> read_prog_bus,
-                          bus_reader_t<uint16_t, uint8_t> read_data_bus, bus_writer_t<uint16_t, uint8_t> write_data_bus,
-                          bool high_priority);
+void cpu_interrupt_vector(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint16_t, uint8_t> read_data_bus,
+                          bus_reader_t<uint32_t, uint8_t> read_prog_bus, bool high_priority);
 
-uint32_t cpu_read_pc(const cpu_known_sfrs_t &regs, bus_reader_t<uint16_t, uint8_t> read_data_bus);
-void cpu_write_pc(const cpu_known_sfrs_t &regs, bus_writer_t<uint16_t, uint8_t> write_data_bus, uint32_t pc);
+addr_read_result_t cpu_bus_read(cpu_t &cpu, const cpu_known_sfrs_t &regs, uint16_t address);
+addr_bit_mask_t cpu_bus_write(cpu_t &cpu, const cpu_known_sfrs_t &regs, uint16_t address, uint8_t value);
 
 void test_2s_complement();
