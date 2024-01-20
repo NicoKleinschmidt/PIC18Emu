@@ -57,7 +57,6 @@ int main(int argc, char **argv)
     sfr_phy_map_t<sfr_count> registers;
     registers.first_address = 0xE41;
     std::vector<uint16_t> physical_regs{
-        static_cast<uint16_t>(pic18f66k80_sfr_map::WREG),  static_cast<uint16_t>(pic18f66k80_sfr_map::STATUS),
         static_cast<uint16_t>(pic18f66k80_sfr_map::BSR),   static_cast<uint16_t>(pic18f66k80_sfr_map::FSR0L),
         static_cast<uint16_t>(pic18f66k80_sfr_map::FSR0H), static_cast<uint16_t>(pic18f66k80_sfr_map::FSR1L),
         static_cast<uint16_t>(pic18f66k80_sfr_map::FSR1H), static_cast<uint16_t>(pic18f66k80_sfr_map::FSR2L),
@@ -226,6 +225,26 @@ int main(int argc, char **argv)
         .CCPRxL = static_cast<uint16_t>(pic18f66k80_sfr_map::CCPR5L),
         .CCPRxH = static_cast<uint16_t>(pic18f66k80_sfr_map::CCPR5H),
         .common = pic18f66k80_ccpx_regs,
+    };
+
+    constexpr eusart_known_sfrs_t pic18f66k80_eusart1_regs = {
+        .TXSTAx = static_cast<uint16_t>(pic18f66k80_sfr_map::TXSTA1),
+        .RCSTAx = static_cast<uint16_t>(pic18f66k80_sfr_map::RCSTA1),
+        .TXREGx = static_cast<uint16_t>(pic18f66k80_sfr_map::TXREG1),
+        .RCREGx = static_cast<uint16_t>(pic18f66k80_sfr_map::RCREG1),
+        .BAUDCONx = static_cast<uint16_t>(pic18f66k80_sfr_map::BAUDCON1),
+        .SPBRGx = static_cast<uint16_t>(pic18f66k80_sfr_map::SPBRG1),
+        .SPBRGHx = static_cast<uint16_t>(pic18f66k80_sfr_map::SPBRGH1),
+    };
+
+    constexpr eusart_known_sfrs_t pic18f66k80_eusart2_regs = {
+        .TXSTAx = static_cast<uint16_t>(pic18f66k80_sfr_map::TXSTA2),
+        .RCSTAx = static_cast<uint16_t>(pic18f66k80_sfr_map::RCSTA2),
+        .TXREGx = static_cast<uint16_t>(pic18f66k80_sfr_map::TXREG2),
+        .RCREGx = static_cast<uint16_t>(pic18f66k80_sfr_map::RCREG2),
+        .BAUDCONx = static_cast<uint16_t>(pic18f66k80_sfr_map::BAUDCON2),
+        .SPBRGx = static_cast<uint16_t>(pic18f66k80_sfr_map::SPBRG2),
+        .SPBRGHx = static_cast<uint16_t>(pic18f66k80_sfr_map::SPBRGH2),
     };
 
     constexpr port_bus_config_t porta_cfg = {
@@ -409,8 +428,11 @@ int main(int argc, char **argv)
     eusart_initialize(eusart1);
     eusart_initialize(eusart2);
 
-    eusart1.mode_change = [&]() { std::cout << "EUSART1: mode changed, baud=" << eusart1.baud_rate; };
-    eusart2.mode_change = [&]() { std::cout << "EUSART2: mode changed, baud=" << eusart2.baud_rate; };
+    eusart1.sfr = pic18f66k80_eusart1_regs;
+    eusart2.sfr = pic18f66k80_eusart2_regs;
+
+    eusart1.mode_change = [&]() { std::cout << "EUSART1: mode changed, baud=" << eusart1.baud_rate << "\n"; };
+    eusart2.mode_change = [&]() { std::cout << "EUSART2: mode changed, baud=" << eusart2.baud_rate << "\n"; };
     eusart1.transmit = [](uint8_t data, bool) { std::cout << static_cast<char>(data); };
     eusart2.transmit = [](uint8_t data, bool) { std::cout << static_cast<char>(data); };
     eusart1.rx_interrupt = [&](bool set) {

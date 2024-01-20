@@ -98,11 +98,6 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     env_cpu_current_instruction(decoded, cpu.pc);
 
-    // Get the current value of common registers, will be written back
-    // once the instruction has been executed.
-    uint8_t status = read_data_bus(static_cast<uint16_t>(sfr.STATUS));
-    uint8_t w = read_data_bus(static_cast<uint16_t>(sfr.WREG));
-
     // Decode the next instruction for debugging.
     decode_result_t debug_next_instruction = cpu_decode(cpu.fetched_instruction);
 
@@ -138,7 +133,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
         if (instruction.xinst_fsr.f == 3)
         {
-            w = instruction.literal.k;
+            cpu.wreg = instruction.literal.k;
             cpu.pc = cpu_stack_top(cpu);
             if (!cpu_stack_pop(cpu, read_prog_bus))
                 return;
@@ -150,53 +145,53 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::ADDLW: {
-        w = alu_add(w, instruction.literal.k, status);
+        cpu.wreg = alu_add(cpu.wreg, instruction.literal.k, cpu.status);
         break;
     }
 
     case opcode_t::ADDWF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_add(w, val, status);
+        uint8_t result = alu_add(cpu.wreg, val, cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
     case opcode_t::ADDWFC: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_add(w, val, (status & alu_status_C), status);
+        uint8_t result = alu_add(cpu.wreg, val, (cpu.status & alu_status_C), cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
     case opcode_t::ANDLW: {
-        w = alu_and(w, instruction.literal.k, status);
+        cpu.wreg = alu_and(cpu.wreg, instruction.literal.k, cpu.status);
         break;
     }
 
     case opcode_t::ANDWF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_and(w, val, status);
+        uint8_t result = alu_and(cpu.wreg, val, cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
     case opcode_t::BC: {
-        if (status & alu_status_C)
+        if (cpu.status & alu_status_C)
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
             cpu.fetched_instruction = 0x0000; // NOP
@@ -213,7 +208,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::BN: {
-        if (status & alu_status_N)
+        if (cpu.status & alu_status_N)
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
             cpu.fetched_instruction = 0x0000; // NOP
@@ -222,7 +217,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::BNC: {
-        if (!(status & alu_status_C))
+        if (!(cpu.status & alu_status_C))
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
             cpu.fetched_instruction = 0x0000; // NOP
@@ -231,7 +226,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::BNN: {
-        if (!(status & alu_status_N))
+        if (!(cpu.status & alu_status_N))
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
             cpu.fetched_instruction = 0x0000; // NOP
@@ -240,7 +235,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::BNOV: {
-        if (!(status & alu_status_OV))
+        if (!(cpu.status & alu_status_OV))
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
             cpu.fetched_instruction = 0x0000; // NOP
@@ -249,7 +244,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::BNZ: {
-        if (!(status & alu_status_Z))
+        if (!(cpu.status & alu_status_Z))
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
             cpu.fetched_instruction = 0x0000; // NOP
@@ -301,7 +296,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::BOV: {
-        if (status & alu_status_OV)
+        if (cpu.status & alu_status_OV)
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal * 2);
             cpu.fetched_instruction = 0x0000; // NOP
@@ -310,7 +305,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::BZ: {
-        if (status & alu_status_Z)
+        if (cpu.status & alu_status_Z)
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal * 2);
             cpu.fetched_instruction = 0x0000; // NOP
@@ -331,8 +326,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
         if (instruction.control_call_high.s)
         {
-            cpu.ws = w;
-            cpu.statuss = status;
+            cpu.ws = cpu.wreg;
+            cpu.status = cpu.status;
             cpu.bsrs = read_data_bus(static_cast<uint16_t>(sfr.BSR));
         }
 
@@ -348,7 +343,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             return;
 
         cpu.pc &= ~0xFF;
-        cpu.pc |= w;
+        cpu.pc |= cpu.wreg;
 
         cpu.fetched_instruction = 0x0000; // NOP
         break;
@@ -358,7 +353,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         (void)cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
         cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, 0,
                           instruction.byte_oriented.a);
-        status |= alu_status_Z;
+        cpu.status |= alu_status_Z;
         break;
     }
 
@@ -371,19 +366,19 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::COMF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_complement(val, status);
+        uint8_t result = alu_complement(val, cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
     case opcode_t::CPFSEQ: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        if (val == w)
+        if (val == cpu.wreg)
         {
             cpu.fetched_instruction = 0x0000; // NOP
         }
@@ -392,7 +387,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::CPFSGT: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        if (val > w)
+        if (val > cpu.wreg)
         {
             cpu.fetched_instruction = 0x0000; // NOP
         }
@@ -401,7 +396,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::CPFSLT: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        if (val < w)
+        if (val < cpu.wreg)
         {
             cpu.fetched_instruction = 0x0000; // NOP
         }
@@ -409,20 +404,20 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::DAW: {
-        uint8_t result = alu_decimal_adjust(w, status);
-        w = result;
+        uint8_t result = alu_decimal_adjust(cpu.wreg, cpu.status);
+        cpu.wreg = result;
         break;
     }
 
     case opcode_t::DECF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_sub(val, 1, status);
+        uint8_t result = alu_sub(val, 1, cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
@@ -434,7 +429,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
 
         if (result == 0)
         {
@@ -451,7 +446,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
 
         if (result != 0)
         {
@@ -472,13 +467,13 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::INCF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_add(val, 1, status);
+        uint8_t result = alu_add(val, 1, cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
@@ -490,7 +485,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
 
         if (result == 0)
         {
@@ -507,7 +502,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
 
         if (result != 0)
         {
@@ -517,19 +512,19 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::IORLW: {
-        w = alu_or(w, instruction.literal.k, status);
+        cpu.wreg = alu_or(cpu.wreg, instruction.literal.k, cpu.status);
         break;
     }
 
     case opcode_t::IORWF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_or(w, val, status);
+        uint8_t result = alu_or(cpu.wreg, val, cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
@@ -551,19 +546,19 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::MOVF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        status &= ~alu_status_N;
-        status &= ~alu_status_Z;
+        cpu.status &= ~alu_status_N;
+        cpu.status &= ~alu_status_Z;
 
         if (val == 0)
-            status |= alu_status_Z;
+            cpu.status |= alu_status_Z;
         if (val & 0b10000000)
-            status |= alu_status_N;
+            cpu.status |= alu_status_N;
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, val,
                               instruction.byte_oriented.a);
         else
-            w = val;
+            cpu.wreg = val;
         break;
     }
 
@@ -589,7 +584,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::MOVLW: {
-        w = instruction.literal.k;
+        cpu.wreg = instruction.literal.k;
         break;
     }
 
@@ -627,13 +622,13 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::MOVWF: {
-        cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, w,
+        cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, cpu.wreg,
                           instruction.byte_oriented.a);
         break;
     }
 
     case opcode_t::MULLW: {
-        uint16_t result = static_cast<uint16_t>(w) * static_cast<uint16_t>(instruction.literal.k);
+        uint16_t result = static_cast<uint16_t>(cpu.wreg) * static_cast<uint16_t>(instruction.literal.k);
         write_data_bus(static_cast<uint16_t>(sfr.PRODH), (result >> 8) & 0xFF);
         write_data_bus(static_cast<uint16_t>(sfr.PRODL), result & 0xFF);
         break;
@@ -641,7 +636,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::MULWF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint16_t result = static_cast<uint16_t>(w) * static_cast<uint16_t>(val);
+        uint16_t result = static_cast<uint16_t>(cpu.wreg) * static_cast<uint16_t>(val);
         write_data_bus(static_cast<uint16_t>(sfr.PRODH), (result >> 8) & 0xFF);
         write_data_bus(static_cast<uint16_t>(sfr.PRODL), result & 0xFF);
         break;
@@ -649,7 +644,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::NEGF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_negate(val, status);
+        uint8_t result = alu_negate(val, cpu.status);
 
         cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                           instruction.byte_oriented.a);
@@ -717,8 +712,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
         if (instruction.control_return.s)
         {
-            w = cpu.ws;
-            status = cpu.statuss;
+            cpu.wreg = cpu.ws;
+            cpu.status = cpu.statuss;
             write_data_bus(static_cast<uint16_t>(sfr.BSR), cpu.bsrs);
         }
 
@@ -727,7 +722,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::RETLW: {
-        w = instruction.literal.k;
+        cpu.wreg = instruction.literal.k;
         cpu.pc = cpu_stack_top(cpu);
         if (!cpu_stack_pop(cpu, read_prog_bus))
             return;
@@ -743,8 +738,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
         if (instruction.control_return.s)
         {
-            w = cpu.ws;
-            status = cpu.statuss;
+            cpu.wreg = cpu.ws;
+            cpu.status = cpu.statuss;
             write_data_bus(static_cast<uint16_t>(sfr.BSR), cpu.bsrs);
         }
 
@@ -754,49 +749,49 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::RLCF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_rotate_left_carry(val, status);
+        uint8_t result = alu_rotate_left_carry(val, cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
     case opcode_t::RLNCF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_rotate_left(val, status);
+        uint8_t result = alu_rotate_left(val, cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
     case opcode_t::RRCF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_rotate_right_carry(val, status);
+        uint8_t result = alu_rotate_right_carry(val, cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
     case opcode_t::RRNCF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_rotate_right(val, status);
+        uint8_t result = alu_rotate_right(val, cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
@@ -836,7 +831,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
         if (instruction.xinst_fsr.f == 3)
         {
-            w = instruction.literal.k;
+            cpu.wreg = instruction.literal.k;
             cpu.pc = cpu_stack_top(cpu);
             if (!cpu_stack_pop(cpu, read_prog_bus))
                 return;
@@ -849,42 +844,42 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::SUBFWB: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_sub(w, val, !(status & alu_status_C), status);
+        uint8_t result = alu_sub(cpu.wreg, val, !(cpu.status & alu_status_C), cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
     case opcode_t::SUBLW: {
-        w = alu_sub(instruction.literal.k, w, status);
+        cpu.wreg = alu_sub(instruction.literal.k, cpu.wreg, cpu.status);
         break;
     }
 
     case opcode_t::SUBWF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_sub(val, w, status);
+        uint8_t result = alu_sub(val, cpu.wreg, cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
     case opcode_t::SUBWFB: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_sub(val, w, !(status & alu_status_C), status);
+        uint8_t result = alu_sub(val, cpu.wreg, !(cpu.status & alu_status_C), cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
@@ -896,7 +891,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
@@ -976,27 +971,24 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::XORLW: {
-        w = alu_xor(instruction.literal.k, w, status);
+        cpu.wreg = alu_xor(instruction.literal.k, cpu.wreg, cpu.status);
         break;
     }
 
     case opcode_t::XORWF: {
         uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        uint8_t result = alu_xor(w, val, status);
+        uint8_t result = alu_xor(cpu.wreg, val, cpu.status);
 
         if (instruction.byte_oriented.d)
             cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
                               instruction.byte_oriented.a);
         else
-            w = result;
+            cpu.wreg = result;
         break;
     }
 
     default: break;
     }
-
-    write_data_bus(static_cast<uint16_t>(sfr.STATUS), status);
-    write_data_bus(static_cast<uint16_t>(sfr.WREG), w);
 }
 
 void cpu_reset_por(cpu_t &cpu)
@@ -1305,6 +1297,14 @@ addr_read_result_t cpu_bus_read(cpu_t &cpu, const cpu_known_sfrs_t &regs, uint16
     {
         return addr_read_result_t{.data = static_cast<uint8_t>((cpu_stack_top(cpu) >> 16) & 0xFF), .mask = 0xFF};
     }
+    else if (address == regs.WREG)
+    {
+        return addr_read_result_t{.data = cpu.wreg, .mask = 0xFF};
+    }
+    else if (address == regs.STATUS)
+    {
+        return addr_read_result_t{.data = cpu.status, .mask = 0x1F};
+    }
 
     return addr_read_result_none;
 }
@@ -1336,14 +1336,27 @@ addr_bit_mask_t cpu_bus_write(cpu_t &cpu, const cpu_known_sfrs_t &regs, uint16_t
     else if (address == regs.TOSL)
     {
         cpu_stack_top_set(cpu, (cpu_stack_top(cpu) & 0xFFFF00) | value);
+        return 0xFF;
     }
     else if (address == regs.TOSH)
     {
         cpu_stack_top_set(cpu, (cpu_stack_top(cpu) & 0xFF00FF) | (value << 8));
+        return 0xFF;
     }
     else if (address == regs.TOSU)
     {
         cpu_stack_top_set(cpu, (cpu_stack_top(cpu) & 0x00FFFF) | (value << 16));
+        return 0xFF;
+    }
+    else if (address == regs.WREG)
+    {
+        cpu.wreg = value;
+        return 0xFF;
+    }
+    else if (address == regs.STATUS)
+    {
+        cpu.status = value & 0x1F;
+        return 0x1F;
     }
 
     return 0x00;

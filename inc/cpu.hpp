@@ -214,6 +214,8 @@ struct cpu_t
     uint32_t pc;
     uint8_t pclath;
     uint8_t pclatu;
+    uint8_t wreg;
+    uint8_t status;
 
     // Shadow registers
     uint8_t ws;
