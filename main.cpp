@@ -57,10 +57,12 @@ int main(int argc, char **argv)
     sfr_phy_map_t<sfr_count> registers;
     registers.first_address = 0xE41;
     std::vector<uint16_t> physical_regs{
-        static_cast<uint16_t>(pic18f66k80_sfr_map::BSR),   static_cast<uint16_t>(pic18f66k80_sfr_map::FSR0L),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR0H), static_cast<uint16_t>(pic18f66k80_sfr_map::FSR1L),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR1H), static_cast<uint16_t>(pic18f66k80_sfr_map::FSR2L),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR2H),
+        static_cast<uint16_t>(pic18f66k80_sfr_map::BSR),     static_cast<uint16_t>(pic18f66k80_sfr_map::FSR0L),
+        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR0H),   static_cast<uint16_t>(pic18f66k80_sfr_map::FSR1L),
+        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR1H),   static_cast<uint16_t>(pic18f66k80_sfr_map::FSR2L),
+        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR2H),   static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRL),
+        static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRH), static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRU),
+        static_cast<uint16_t>(pic18f66k80_sfr_map::TABLAT),
     };
     registers.implemented_registers = sfr_phy_implemented_regs<sfr_count>(0xE41, physical_regs);
     sfr_phy_reset(registers, reg_reset_type_t::power_on_reset);
@@ -420,7 +422,7 @@ int main(int argc, char **argv)
     adc_ctx_t adc;
     adc_initialize(adc, pic18f66k80_adc_regs);
     adc.done_interrupt = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR1, reg_pir1_mask_ADIF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR1, 6, set);
     };
 
     eusart_ctx_t eusart1;
@@ -433,19 +435,25 @@ int main(int argc, char **argv)
 
     eusart1.mode_change = [&]() { std::cout << "EUSART1: mode changed, baud=" << eusart1.baud_rate << "\n"; };
     eusart2.mode_change = [&]() { std::cout << "EUSART2: mode changed, baud=" << eusart2.baud_rate << "\n"; };
-    eusart1.transmit = [](uint8_t data, bool) { std::cout << static_cast<char>(data); };
-    eusart2.transmit = [](uint8_t data, bool) { std::cout << static_cast<char>(data); };
+    eusart1.transmit = [&](uint8_t data, bool) {
+        std::cout << static_cast<char>(data);
+        eusart_import_tx_done(eusart1);
+    };
+    eusart2.transmit = [&](uint8_t data, bool) {
+        std::cout << static_cast<char>(data);
+        eusart_import_tx_done(eusart2);
+    };
     eusart1.rx_interrupt = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR1, reg_pir1_mask_RC1IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR1, 5, set);
     };
     eusart2.rx_interrupt = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR3, reg_pir3_mask_RC2IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR3, 5, set);
     };
     eusart1.tx_interrupt = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR1, reg_pir1_mask_TX1IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR1, 4, set);
     };
     eusart2.tx_interrupt = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR3, reg_pir3_mask_TX2IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR3, 4, set);
     };
 
     auto ccpx_special_event_tigger = [&](uint8_t timer_num, uint8_t ccp_num) {
@@ -474,19 +482,19 @@ int main(int argc, char **argv)
     ccp4.special_event_timer = [&](uint8_t timer_num) { ccpx_special_event_tigger(timer_num, 4); };
     ccp5.special_event_timer = [&](uint8_t timer_num) { ccpx_special_event_tigger(timer_num, 5); };
     ccp1.interrupt = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR3, reg_pir3_mask_CCP1IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR3, 1, set);
     };
     ccp2.interrupt = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR3, reg_pir3_mask_CCP2IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR3, 2, set);
     };
     ccp3.interrupt = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR4, reg_pir4_mask_CCP3IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR4, 0, set);
     };
     ccp4.interrupt = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR4, reg_pir4_mask_CCP4IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR4, 1, set);
     };
     ccp5.interrupt = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR4, reg_pir4_mask_CCP5IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR4, 2, set);
     };
 
     timer2.output = [&]() {

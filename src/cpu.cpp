@@ -79,8 +79,10 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
               bus_writer_t<uint16_t, uint8_t> write_data_bus, std::function<void(cpu_event_t e)> event_handler)
 {
     decode_result_t decoded = cpu_decode(cpu.fetched_instruction);
+    uint32_t decoded_addr = cpu.fetched_instruction_addr;
     instruction_t instruction = decoded.instruction;
 
+    cpu.fetched_instruction_addr = cpu.pc;
     uint8_t fetched_low = read_prog_bus(cpu.pc++);
     uint8_t fetched_high = read_prog_bus(cpu.pc++);
     cpu.fetched_instruction = (static_cast<uint16_t>(fetched_high) << 8) | fetched_low;
@@ -96,10 +98,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         return;
     }
 
-    env_cpu_current_instruction(decoded, cpu.pc);
-
-    // Decode the next instruction for debugging.
-    decode_result_t debug_next_instruction = cpu_decode(cpu.fetched_instruction);
+    env_cpu_current_instruction(decoded, decoded_addr);
 
     bool xinst_enabled = reg_check_configuration_bit(reg_configuration_bit_t::XINST, read_prog_bus);
 
@@ -994,6 +993,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 void cpu_reset_por(cpu_t &cpu)
 {
     cpu.fetched_instruction = 0;
+    cpu.fetched_instruction_addr = 0xFFFFFFFF;
     cpu.pc = 0;
     cpu.pclath = 0;
     cpu.pclatu = 0;

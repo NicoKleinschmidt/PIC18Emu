@@ -15,6 +15,7 @@ struct int_source_t
     bool high_priority;
     bool requested;
     bool is_peripheral;
+    bool flag_read_only;
 };
 
 template <size_t SRC_COUNT> struct int_state_t
@@ -23,20 +24,6 @@ template <size_t SRC_COUNT> struct int_state_t
     bool GIEH;
     bool GIEL;
     std::array<int_source_t, SRC_COUNT> sources;
-};
-
-struct int_known_sfrs_18fxx2_t
-{
-    uint16_t INTCON;
-    uint16_t INTCON2;
-    uint16_t INTCON3;
-    uint16_t PIR1;
-    uint16_t PIE1;
-    uint16_t IPR1;
-    uint16_t PIR2;
-    uint16_t PIE2;
-    uint16_t IPR2;
-    uint16_t RCON;
 };
 
 /// @brief Should be called before every cpu tick to check if an interrupt occured.
@@ -50,13 +37,6 @@ void interrupt_tick(bus_reader_t<uint32_t, uint8_t> read_prog_bus, int_state_t<S
                     wakeup_func_t wake);
 
 #include "int.tcc"
-
-addr_read_result_t int_addr_space_read_18fxx2(int_state_t<18> &state, const int_known_sfrs_18fxx2_t &sfr,
-                                              uint16_t addr);
-addr_bit_mask_t int_addr_space_write_18fxx2(int_state_t<18> &state, const int_known_sfrs_18fxx2_t &sfr, uint16_t addr,
-                                            uint8_t value);
-void int_state_initialize_18fxx2(int_state_t<18> &state);
-void int_state_reset_18fxx2(int_state_t<18> &state);
 
 struct int_known_sfrs_18f66k80_t
 {
@@ -85,5 +65,6 @@ addr_read_result_t int_addr_space_read_18f66k80(int_state_t<39> &state, const in
                                                 uint16_t addr);
 addr_bit_mask_t int_addr_space_write_18f66k80(int_state_t<39> &state, const int_known_sfrs_18f66k80_t &sfr,
                                               uint16_t addr, uint8_t value);
+void int_set_flag(int_state_t<39> &state, const int_known_sfrs_18f66k80_t &sfr, uint16_t reg, uint8_t bit, bool b);
 void int_state_initialize_18f66k80(int_state_t<39> &state);
 void int_state_reset_18f66k80(int_state_t<39> &state);

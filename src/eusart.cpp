@@ -76,6 +76,11 @@ addr_bit_mask_t eusart_bus_write(eusart_ctx_t &ctx, uint16_t address, uint8_t va
             ctx.mode_change();
         }
 
+        if (ctx.tx_en && ctx.tx_interrupt != nullptr)
+        {
+            ctx.tx_interrupt(true);
+        }
+
         return 0xFF;
     }
     else if (address == ctx.sfr.RCSTAx)
@@ -103,13 +108,13 @@ addr_bit_mask_t eusart_bus_write(eusart_ctx_t &ctx, uint16_t address, uint8_t va
     {
         ctx.tx_reg = value;
         ctx.txreg_loaded = true;
-        if (!ctx.tsr_loaded)
-        {
-            load_tsr(ctx);
-        }
         if (ctx.tx_interrupt != nullptr)
         {
             ctx.tx_interrupt(false);
+        }
+        if (!ctx.tsr_loaded)
+        {
+            load_tsr(ctx);
         }
 
         return 0xFF;
@@ -124,16 +129,28 @@ addr_bit_mask_t eusart_bus_write(eusart_ctx_t &ctx, uint16_t address, uint8_t va
         ctx.clock_data_polarity = value & (1 << 4);
         ctx.baud_rate_16bit_en = value & (1 << 3);
         ctx.wakeup_en = value & (1 << 1);
+        if (ctx.mode_change != nullptr)
+        {
+            ctx.mode_change();
+        }
         return 0xFB;
     }
     else if (address == ctx.sfr.SPBRGx)
     {
         ctx.baud_rate = (ctx.baud_rate & 0xFF00) | value;
+        if (ctx.mode_change != nullptr)
+        {
+            ctx.mode_change();
+        }
         return 0xFF;
     }
     else if (address == ctx.sfr.SPBRGHx)
     {
         ctx.baud_rate = (ctx.baud_rate & 0x00FF) | (value << 8);
+        if (ctx.mode_change != nullptr)
+        {
+            ctx.mode_change();
+        }
         return 0xFF;
     }
 
