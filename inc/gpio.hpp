@@ -3,8 +3,6 @@
 #include <cstdint>
 #include <functional>
 
-#include "reg.hpp"
-
 using gpio_on_change_interrupt_req = std::function<void(bool set)>;
 using gpio_change_cb = std::function<void(uint8_t pin_num, io_state_t state)>;
 

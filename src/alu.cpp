@@ -1,5 +1,4 @@
 #include "alu.hpp"
-#include "reg.hpp"
 
 uint8_t alu_add(uint8_t a, uint8_t b, uint8_t &status)
 {
@@ -91,7 +90,7 @@ uint8_t alu_xor(uint8_t a, uint8_t b, uint8_t &status)
     return result;
 }
 
-uint8_t alu_complement(uint8_t a, uint8_t &status)
+uint8_t alu_complement(uint8_t a, uint8_t &)
 {
     return -static_cast<unsigned int>(a);
 }

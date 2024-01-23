@@ -3,6 +3,7 @@
 #include <bus.hpp>
 #include <cstdint>
 #include <functional>
+#include <tbl.hpp>
 
 enum class opcode_t : uint8_t
 {
@@ -208,6 +209,9 @@ struct cpu_t
     /// The called function may set next_action function again.
     std::function<void(cpu_t &cpu, instruction_t &instruction)> next_action;
 
+    std::function<void(bool high_prio, bool enabled)> global_interrupt_enable;
+    tbl_ctx_t tbl;
+
     std::array<uint32_t, 31> hw_stack;
     uint8_t stkptr;
     bool stkful;
@@ -245,10 +249,6 @@ struct cpu_known_sfrs_t
     uint16_t TOSL;
     uint16_t TOSH;
     uint16_t TOSU;
-    uint16_t TBLPTRL;
-    uint16_t TBLPTRH;
-    uint16_t TBLPTRU;
-    uint16_t TABLAT;
     uint16_t RCON;
     uint16_t INTCON;
     uint16_t PRODL;

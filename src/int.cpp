@@ -1,6 +1,5 @@
 #include "int.hpp"
 #include "18f66k80.hpp"
-#include "reg.hpp"
 
 template <size_t srcs>
 static addr_bit_mask_t handle_pir_write(int_state_t<srcs> &state, uint8_t value, uint8_t offset, uint8_t valid_bits,

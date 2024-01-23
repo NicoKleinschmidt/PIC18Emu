@@ -7,6 +7,7 @@
 
 #include "18f66k80.hpp"
 #include "adc.hpp"
+#include "bank.hpp"
 #include "ccp.hpp"
 #include "cpu.hpp"
 #include "environment.hpp"
@@ -15,7 +16,7 @@
 #include "int.hpp"
 #include "mem.hpp"
 #include "port.hpp"
-#include "reg.hpp"
+#include "tbl.hpp"
 #include "timer.hpp"
 
 inline void sleep_us(uint32_t us)
@@ -47,25 +48,16 @@ int main(int argc, char **argv)
     std::string program_file_name = argv[1];
 
     cpu_t cpu;
+    tbl_initialize(cpu.tbl);
+    cpu.tbl.TABLAT = static_cast<uint16_t>(pic18f66k80_sfr_map::TABLAT);
+    cpu.tbl.TBLPTRL = static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRL);
+    cpu.tbl.TBLPTRH = static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRH);
+    cpu.tbl.TBLPTRU = static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRU);
 
     memory_t<0x600> sram = {
         .start_address = 0x00,
         .data = std::make_unique<std::array<uint8_t, 0x600>>(),
     };
-
-    constexpr size_t sfr_count = 0xFFF - 0xE40;
-    sfr_phy_map_t<sfr_count> registers;
-    registers.first_address = 0xE41;
-    std::vector<uint16_t> physical_regs{
-        static_cast<uint16_t>(pic18f66k80_sfr_map::BSR),     static_cast<uint16_t>(pic18f66k80_sfr_map::FSR0L),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR0H),   static_cast<uint16_t>(pic18f66k80_sfr_map::FSR1L),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR1H),   static_cast<uint16_t>(pic18f66k80_sfr_map::FSR2L),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::FSR2H),   static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRL),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRH), static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRU),
-        static_cast<uint16_t>(pic18f66k80_sfr_map::TABLAT),
-    };
-    registers.implemented_registers = sfr_phy_implemented_regs<sfr_count>(0xE41, physical_regs);
-    sfr_phy_reset(registers, reg_reset_type_t::power_on_reset);
 
     auto program_mem = std::make_unique<std::array<uint8_t, 32768>>();
 
@@ -83,10 +75,6 @@ int main(int argc, char **argv)
         .TOSL = static_cast<uint16_t>(pic18f66k80_sfr_map::TOSL),
         .TOSH = static_cast<uint16_t>(pic18f66k80_sfr_map::TOSH),
         .TOSU = static_cast<uint16_t>(pic18f66k80_sfr_map::TOSU),
-        .TBLPTRL = static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRL),
-        .TBLPTRH = static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRH),
-        .TBLPTRU = static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRU),
-        .TABLAT = static_cast<uint16_t>(pic18f66k80_sfr_map::TABLAT),
         .RCON = static_cast<uint16_t>(pic18f66k80_sfr_map::RCON),
         .INTCON = static_cast<uint16_t>(pic18f66k80_sfr_map::INTCON),
         .PRODL = static_cast<uint16_t>(pic18f66k80_sfr_map::PRODL),
@@ -96,8 +84,8 @@ int main(int argc, char **argv)
         .FSR2L = static_cast<uint16_t>(pic18f66k80_sfr_map::FSR2L),
     };
 
-    indf_known_sfrs_t pic18fxx2_indf_regs = {
-        .WREG = static_cast<uint16_t>(pic18f66k80_sfr_map::WREG),
+    bank_known_sfrs_t pic18fxx2_bank_regs = {
+        .BSR = static_cast<uint16_t>(pic18f66k80_sfr_map::BSR),
         .FSR0H = static_cast<uint16_t>(pic18f66k80_sfr_map::FSR0H),
         .FSR1H = static_cast<uint16_t>(pic18f66k80_sfr_map::FSR1H),
         .FSR2H = static_cast<uint16_t>(pic18f66k80_sfr_map::FSR2H),
@@ -370,12 +358,24 @@ int main(int argc, char **argv)
     gpio_initialize(gpiof, register_addr(pic18f66k80_sfr_map::PORTF), register_addr(pic18f66k80_sfr_map::LATF));
     gpio_initialize(gpiog, register_addr(pic18f66k80_sfr_map::PORTG), register_addr(pic18f66k80_sfr_map::LATG));
 
+    bank_ctx_t bank_ctx;
+    bank_initialize(bank_ctx);
+    bank_ctx.sfr = pic18fxx2_bank_regs;
+    bank_ctx.read_wreg = [&]() -> uint8_t { return cpu.wreg; };
+
     int_state_t<39> int_state;
     int_state_initialize_18f66k80(int_state);
     int_state_reset_18f66k80(int_state);
 
+    cpu.global_interrupt_enable = [&](bool high_prio, bool enabled) {
+        if (high_prio)
+            int_state.GIEH = enabled;
+        else
+            int_state.GIEL = enabled;
+    };
+
     auto on_portb_changed = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18fxx2_cpu_regs.INTCON, reg_intcon_mask_RBIF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.INTCON, 1, set);
     };
 
     gpio_add_change_interrupt(gpiob, 7, on_portb_changed);
@@ -384,23 +384,23 @@ int main(int argc, char **argv)
     gpio_add_change_interrupt(gpiob, 4, on_portb_changed);
 
     auto on_timer0_overflow = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18fxx2_cpu_regs.INTCON, reg_intcon_mask_TMR0IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.INTCON, 3, set);
     };
 
     auto on_timer1_overflow = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR1, reg_pir1_mask_TMR1IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR1, 1, set);
     };
 
     auto on_timer2_match = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR1, reg_pir1_mask_TMR2IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR1, 2, set);
     };
 
     auto on_timer3_overflow = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR2, reg_pir2_mask_TMR3IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR2, 2, set);
     };
 
     auto on_timer4_match = [&](bool set) {
-        reg_sfr_write(read_data_bus, write_data_bus, pic18f66k80_int_regs.PIR4, reg_pir4_mask_TMR4IF, set);
+        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR4, 7, set);
     };
 
     timer0_t timer0;
@@ -514,24 +514,14 @@ int main(int argc, char **argv)
     };
 
     read_data_bus = [&](uint16_t addr) -> uint8_t {
-        sfr_ctx_t ctx{
-            .read_bus = read_data_bus,
-            .write_bus = write_data_bus,
-            .read_sfr_phy = [&](uint16_t sfr) -> addr_read_result_t { return sfr_phy_read(registers, sfr); },
-            .write_sfr_phy = [&](uint16_t sfr, uint8_t val) -> addr_bit_mask_t {
-                return sfr_phy_write(registers, sfr, val);
-            },
-            .sfr = pic18fxx2_indf_regs,
-            .first_address = 0xE41,
-            .last_address = 0xFFF,
-        };
-
         addr_read_result_t result;
         uint8_t value = 0;
 
         result = cpu_bus_read(cpu, pic18fxx2_cpu_regs, addr);
         value |= result.data & result.mask;
-        result = reg_sfr_bus_read(ctx, addr);
+        result = bank_bus_read(bank_ctx, addr);
+        value |= result.data & result.mask;
+        result = tbl_bus_read(cpu.tbl, addr);
         value |= result.data & result.mask;
         result = int_addr_space_read_18f66k80(int_state, pic18f66k80_int_regs, addr);
         value |= result.data & result.mask;
@@ -597,20 +587,9 @@ int main(int argc, char **argv)
     };
 
     write_data_bus = [&](uint16_t addr, uint8_t val) {
-        sfr_ctx_t ctx{
-            .read_bus = read_data_bus,
-            .write_bus = write_data_bus,
-            .read_sfr_phy = [&](uint16_t sfr) -> addr_read_result_t { return sfr_phy_read(registers, sfr); },
-            .write_sfr_phy = [&](uint16_t sfr, uint8_t val) -> addr_bit_mask_t {
-                return sfr_phy_write(registers, sfr, val);
-            },
-            .sfr = pic18fxx2_indf_regs,
-            .first_address = 0xE41,
-            .last_address = 0xFFF,
-        };
-
         cpu_bus_write(cpu, pic18fxx2_cpu_regs, addr, val);
-        reg_sfr_bus_write(ctx, addr, val);
+        bank_bus_write(bank_ctx, addr, val);
+        tbl_bus_write(cpu.tbl, addr, val);
         int_addr_space_write_18f66k80(int_state, pic18f66k80_int_regs, addr, val);
         gpio_bus_write(gpioa, addr, val);
         gpio_bus_write(gpiob, addr, val);
@@ -643,6 +622,9 @@ int main(int argc, char **argv)
 
         env_bus_write(addr, val);
     };
+
+    bank_ctx.read_bus = read_data_bus;
+    bank_ctx.write_bus = write_data_bus;
 
     auto read_prog_bus = [&](uint32_t addr) -> uint8_t {
         if (addr >= program_mem->size())
@@ -855,7 +837,7 @@ int main(int argc, char **argv)
             cpu_tick(cpu, pic18fxx2_cpu_regs, read_prog_bus, write_prog_bus, read_data_bus, write_data_bus, events);
         }
 
-        sleep_us(1000);
+        // sleep_us(1000);
     }
 
     auto end = std::chrono::steady_clock::now();
@@ -869,7 +851,10 @@ int main(int argc, char **argv)
         return std::to_string(d.count() / 1'000'000) + "s";
     };
 
-    std::cout << "\nTicks: " << tick_counter << ", Runtime: " << format_duration(end - start) << "\n";
+    std::chrono::duration<double> runtime = end - start;
+    std::cout << "\nTicks: " << tick_counter << ", Runtime: " << format_duration(runtime)
+              << ", T/ms: " << tick_counter / std::chrono::duration_cast<std::chrono::milliseconds>(runtime).count()
+              << "\n";
 
     return 0;
 }

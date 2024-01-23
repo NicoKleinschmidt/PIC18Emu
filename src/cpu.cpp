@@ -1,7 +1,7 @@
 #include "cpu.hpp"
 #include "18f66k80.hpp"
 #include "alu.hpp"
-#include "reg.hpp"
+#include "config.hpp"
 #include <environment.hpp>
 #include <iostream>
 
@@ -100,7 +100,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     env_cpu_current_instruction(decoded, decoded_addr);
 
-    bool xinst_enabled = reg_check_configuration_bit(reg_configuration_bit_t::XINST, read_prog_bus);
+    bool xinst_enabled = configuration_check_bit(configuration_bit_t::XINST, read_prog_bus);
 
     if (decoded.opcode == opcode_t::ILLEGAL)
     {
@@ -357,8 +357,9 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::CLRWDT: {
-        reg_sfr_write(read_data_bus, write_data_bus, sfr.RCON, reg_rcon_mask_TO, 1);
-        reg_sfr_write(read_data_bus, write_data_bus, sfr.RCON, reg_rcon_mask_PD, 1);
+        // TODO:
+        // reg_sfr_write(read_data_bus, write_data_bus, sfr.RCON, reg_rcon_mask_TO, 1);
+        // reg_sfr_write(read_data_bus, write_data_bus, sfr.RCON, reg_rcon_mask_PD, 1);
         event_handler(cpu_event_t::reset_wdt);
         break;
     }
@@ -704,10 +705,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         if (!cpu_stack_pop(cpu, read_prog_bus))
             return;
 
-        if (cpu.is_high_priority_interrupt)
-            reg_sfr_write(read_data_bus, write_data_bus, sfr.INTCON, reg_intcon_mask_GIE_GIEH, 1);
-        else
-            reg_sfr_write(read_data_bus, write_data_bus, sfr.INTCON, reg_intcon_mask_PEIE_GIEL, 1);
+        cpu.global_interrupt_enable(cpu.is_high_priority_interrupt, true);
 
         if (instruction.control_return.s)
         {
@@ -802,8 +800,9 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::SLEEP: {
-        reg_sfr_write(read_data_bus, write_data_bus, sfr.RCON, reg_rcon_mask_TO, 1);
-        reg_sfr_write(read_data_bus, write_data_bus, sfr.RCON, reg_rcon_mask_PD, 0);
+        // TODO:
+        // reg_sfr_write(read_data_bus, write_data_bus, sfr.RCON, reg_rcon_mask_TO, 1);
+        // reg_sfr_write(read_data_bus, write_data_bus, sfr.RCON, reg_rcon_mask_PD, 0);
         event_handler(cpu_event_t::reset_wdt);
         event_handler(cpu_event_t::sleep);
         break;
@@ -895,32 +894,16 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::TBLRD: {
-        uint8_t tblptru = read_data_bus(static_cast<uint16_t>(sfr.TBLPTRU));
-        uint8_t tblptrh = read_data_bus(static_cast<uint16_t>(sfr.TBLPTRH));
-        uint8_t tblptrl = read_data_bus(static_cast<uint16_t>(sfr.TBLPTRL));
-        uint32_t tblptr = (static_cast<uint32_t>(tblptru) << 16) | (static_cast<uint32_t>(tblptrh) << 8) |
-                          static_cast<uint32_t>(tblptrl);
-
-        if (instruction.table_op.n == 3)
-            tblptr++;
-
-        uint8_t val = read_prog_bus(tblptr);
-        write_data_bus(static_cast<uint16_t>(sfr.TABLAT), val);
-
+        tblptr_action_t action = tblptr_action_t::none;
         if (instruction.table_op.n == 1)
-            tblptr++;
+            action = tblptr_action_t::postinc;
         else if (instruction.table_op.n == 2)
-            tblptr--;
+            action = tblptr_action_t::postdec;
+        else if (instruction.table_op.n == 3)
+            action = tblptr_action_t::preinc;
 
-        if (instruction.table_op.n != 0)
-        {
-            tblptru = static_cast<uint8_t>(tblptr >> 16);
-            tblptrh = static_cast<uint8_t>(tblptr >> 8);
-            tblptrl = static_cast<uint8_t>(tblptr);
-            write_data_bus(static_cast<uint16_t>(sfr.TBLPTRU), tblptru);
-            write_data_bus(static_cast<uint16_t>(sfr.TBLPTRH), tblptrh);
-            write_data_bus(static_cast<uint16_t>(sfr.TBLPTRL), tblptrl);
-        }
+        tbl_read(cpu.tbl, read_prog_bus, action);
+
         // Wait one tick
         cpu.pc -= 2;
         cpu.next_action = [](cpu_t &, instruction_t &) {};
@@ -928,32 +911,16 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::TBLWT: {
-        uint8_t tblptru = read_data_bus(static_cast<uint16_t>(sfr.TBLPTRU));
-        uint8_t tblptrh = read_data_bus(static_cast<uint16_t>(sfr.TBLPTRH));
-        uint8_t tblptrl = read_data_bus(static_cast<uint16_t>(sfr.TBLPTRL));
-        uint32_t tblptr = (static_cast<uint32_t>(tblptru) << 16) | (static_cast<uint32_t>(tblptrh) << 8) |
-                          static_cast<uint32_t>(tblptrl);
-
-        if (instruction.table_op.n == 3)
-            tblptr++;
-
-        uint8_t val = read_data_bus(static_cast<uint16_t>(sfr.TABLAT));
-        write_prog_bus(tblptr, val);
-
+        tblptr_action_t action = tblptr_action_t::none;
         if (instruction.table_op.n == 1)
-            tblptr++;
+            action = tblptr_action_t::postinc;
         else if (instruction.table_op.n == 2)
-            tblptr--;
+            action = tblptr_action_t::postdec;
+        else if (instruction.table_op.n == 3)
+            action = tblptr_action_t::preinc;
 
-        if (instruction.table_op.n != 0)
-        {
-            tblptru = static_cast<uint8_t>(tblptr >> 16);
-            tblptrh = static_cast<uint8_t>(tblptr >> 8);
-            tblptrl = static_cast<uint8_t>(tblptr);
-            write_data_bus(static_cast<uint16_t>(sfr.TBLPTRU), tblptru);
-            write_data_bus(static_cast<uint16_t>(sfr.TBLPTRH), tblptrh);
-            write_data_bus(static_cast<uint16_t>(sfr.TBLPTRL), tblptrl);
-        }
+        tbl_write(cpu.tbl, write_prog_bus, action);
+
         // Wait one tick
         cpu.pc -= 2;
         cpu.next_action = [](cpu_t &, instruction_t &) {};
@@ -1192,7 +1159,7 @@ bool cpu_stack_push(cpu_t &cpu, uint32_t value, bus_reader_t<uint32_t, uint8_t> 
     if (cpu.stkful)
     {
         // Check if the cpu should be reset because stack became full.
-        bool reset_on_full = reg_check_configuration_bit(reg_configuration_bit_t::STVREN, read_prog_bus);
+        bool reset_on_full = configuration_check_bit(configuration_bit_t::STVREN, read_prog_bus);
 
         if (reset_on_full)
         {
@@ -1210,7 +1177,7 @@ bool cpu_stack_pop(cpu_t &cpu, bus_reader_t<uint32_t, uint8_t> read_prog_bus)
     {
         cpu.stkunf = true;
 
-        bool reset_on_underflow = reg_check_configuration_bit(reg_configuration_bit_t::STVREN, read_prog_bus);
+        bool reset_on_underflow = configuration_check_bit(configuration_bit_t::STVREN, read_prog_bus);
 
         if (reset_on_underflow)
         {
