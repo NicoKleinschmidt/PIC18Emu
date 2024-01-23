@@ -1,5 +1,7 @@
 #pragma once
 
+#include "int.hpp"
+
 // clang-format off
 enum class pic18f66k80_sfr_map
 {
@@ -85,6 +87,7 @@ enum class pic18f66k80_sfr_map
     TXB1SIDH    = 0xF11, RXF0SIDH     = 0xEE0, B3CON        = 0xEB0, B0SIDH      = 0xE81, RXF8SIDH    = 0xE50,
     TXB1CON     = 0xF10, B0CON        = 0xE80,
 };
+// clang-format on
 
 inline constexpr uint16_t register_addr(pic18f66k80_sfr_map sfr)
 {
@@ -119,196 +122,69 @@ enum reg_stkptr_mask_t
     reg_stkptr_mask_STKOVF = 1 << 7,
 };
 
-enum reg_intcon_mask_t
+namespace interrupt
 {
-    reg_intcon_mask_RBIF = 1 << 0,
-    reg_intcon_mask_INT0IF = 1 << 1,
-    reg_intcon_mask_TMR0IF = 1 << 2,
-    reg_intcon_mask_RBIE = 1 << 3,
-    reg_intcon_mask_INT0IE = 1 << 4,
-    reg_intcon_mask_TMR0IE = 1 << 5,
-    reg_intcon_mask_PEIE_GIEL = 1 << 6,
-    reg_intcon_mask_GIE_GIEH = 1 << 7,
+/// @brief Cast a register name to its address.
+constexpr uint16_t a(pic18f66k80_sfr_map sfr)
+{
+    return static_cast<uint16_t>(sfr);
+}
+
+using REG = pic18f66k80_sfr_map;
+using enum int_make_source_flags_t;
+
+struct pic18f66k80_interrupt_map
+{
+    int_source_t INT0 = int_make_source(a(REG::INTCON), 4, a(REG::INTCON), 1, 0, 0);
+    int_source_t INT1 = int_make_source(a(REG::INTCON3), 3, a(REG::INTCON3), 0, a(REG::INTCON3), 6);
+    int_source_t INT2 = int_make_source(a(REG::INTCON3), 4, a(REG::INTCON3), 1, a(REG::INTCON3), 7);
+    int_source_t INT3 = int_make_source(a(REG::INTCON3), 5, a(REG::INTCON3), 2, a(REG::INTCON2), 1);
+    int_source_t RB = int_make_source(a(REG::INTCON), 3, a(REG::INTCON), 0, a(REG::INTCON2), 0);
+    int_source_t TMR0 = int_make_source(a(REG::INTCON), 7, a(REG::INTCON), 2, a(REG::INTCON2), 2);
+    int_source_t TMR1 = int_make_source(a(REG::PIE1), 0, a(REG::PIR1), 0, a(REG::IPR1), 0, peripheral);
+    int_source_t TMR1G = int_make_source(a(REG::PIE1), 2, a(REG::PIR1), 2, a(REG::IPR1), 2, peripheral);
+    int_source_t TMR2 = int_make_source(a(REG::PIE1), 1, a(REG::PIR1), 1, a(REG::IPR1), 1, peripheral);
+    int_source_t TMR3 = int_make_source(a(REG::PIE2), 1, a(REG::PIR2), 1, a(REG::IPR2), 1, peripheral);
+    int_source_t TMR3G = int_make_source(a(REG::PIE2), 0, a(REG::PIR2), 0, a(REG::IPR2), 0, peripheral);
+    int_source_t TMR4 = int_make_source(a(REG::PIE4), 7, a(REG::PIR4), 7, a(REG::IPR4), 7, peripheral);
+    int_source_t CCP1 = int_make_source(a(REG::PIE3), 1, a(REG::PIR3), 1, a(REG::IPR3), 1, peripheral);
+    int_source_t CCP2 = int_make_source(a(REG::PIE3), 2, a(REG::PIR3), 2, a(REG::IPR3), 2, peripheral);
+    int_source_t CCP3 = int_make_source(a(REG::PIE4), 0, a(REG::PIR4), 0, a(REG::IPR4), 0, peripheral);
+    int_source_t CCP4 = int_make_source(a(REG::PIE4), 1, a(REG::PIR4), 1, a(REG::IPR4), 1, peripheral);
+    int_source_t CCP5 = int_make_source(a(REG::PIE4), 2, a(REG::PIR4), 2, a(REG::IPR4), 2, peripheral);
+    int_source_t EE = int_make_source(a(REG::PIE4), 6, a(REG::PIR4), 6, a(REG::IPR4), 6, peripheral);
+    int_source_t CMP1 = int_make_source(a(REG::PIE4), 4, a(REG::PIR4), 4, a(REG::IPR4), 4, peripheral);
+    int_source_t CMP2 = int_make_source(a(REG::PIE4), 5, a(REG::PIR4), 5, a(REG::IPR4), 5, peripheral);
+    int_source_t CTMU = int_make_source(a(REG::PIE3), 3, a(REG::PIR3), 3, a(REG::IPR3), 3, peripheral);
+    int_source_t PSP = int_make_source(a(REG::PIE1), 7, a(REG::PIR1), 7, a(REG::IPR1), 7, peripheral);
+    int_source_t AD = int_make_source(a(REG::PIE1), 6, a(REG::PIR1), 6, a(REG::IPR1), 6, peripheral);
+    int_source_t SSP = int_make_source(a(REG::PIE1), 3, a(REG::PIR1), 3, a(REG::IPR1), 3, peripheral);
+    int_source_t OSC = int_make_source(a(REG::PIE2), 7, a(REG::PIR2), 7, a(REG::IPR2), 7, peripheral);
+    int_source_t TX1 = int_make_source(a(REG::PIE1), 4, a(REG::PIR1), 4, a(REG::IPR1), 4, peripheral | flag_ro);
+    int_source_t TX2 = int_make_source(a(REG::PIE3), 4, a(REG::PIR3), 4, a(REG::IPR3), 4, peripheral | flag_ro);
+    int_source_t RC1 = int_make_source(a(REG::PIE1), 5, a(REG::PIR1), 5, a(REG::IPR1), 5, peripheral);
+    int_source_t RC2 = int_make_source(a(REG::PIE3), 5, a(REG::PIR3), 5, a(REG::IPR3), 5, peripheral);
+    int_source_t BCL = int_make_source(a(REG::PIE2), 3, a(REG::PIR2), 3, a(REG::IPR2), 3, peripheral);
+    int_source_t HLVD = int_make_source(a(REG::PIE2), 2, a(REG::PIR2), 2, a(REG::IPR2), 2, peripheral);
+    int_source_t IRX = int_make_source(a(REG::PIE5), 7, a(REG::PIR5), 7, a(REG::IPR5), 7, peripheral);
+    int_source_t WAK = int_make_source(a(REG::PIE5), 6, a(REG::PIR5), 6, a(REG::IPR5), 6, peripheral);
+    int_source_t ERR = int_make_source(a(REG::PIE5), 5, a(REG::PIR5), 5, a(REG::IPR5), 5, peripheral);
+    int_source_t TX2B = int_make_source(a(REG::PIE5), 4, a(REG::PIR5), 4, a(REG::IPR5), 4, peripheral);
+    int_source_t TXB1 = int_make_source(a(REG::PIE5), 3, a(REG::PIR5), 3, a(REG::IPR5), 3, peripheral);
+    int_source_t TXB0 = int_make_source(a(REG::PIE5), 2, a(REG::PIR5), 2, a(REG::IPR5), 2, peripheral);
+    int_source_t RXB1 = int_make_source(a(REG::PIE5), 1, a(REG::PIR5), 1, a(REG::IPR5), 1, peripheral);
+    int_source_t RXB0 = int_make_source(a(REG::PIE5), 0, a(REG::PIR5), 0, a(REG::IPR5), 0, peripheral);
 };
 
-enum reg_intcon2_mask_t
-{
-    reg_intcon2_mask_RBIP = 1 << 0,
-    reg_intcon2_mask_INT3IP = 1 << 1,
-    reg_intcon2_mask_TMR0IP = 1 << 2,
-    reg_intcon2_mask_INTEDG2 = 1 << 4,
-    reg_intcon2_mask_INTEDG1 = 1 << 5,
-    reg_intcon2_mask_INTEDG0 = 1 << 6,
-    reg_intcon2_mask_RBPU = 1 << 7,
-};
+} // namespace interrupt
 
-enum reg_intcon3_mask_t
-{
-    reg_intcon3_mask_INT1IF = 1 << 0,
-    reg_intcon3_mask_INT2IF = 1 << 1,
-    reg_intcon3_mask_INT3IF = 1 << 2,
-    reg_intcon3_mask_INT1IE = 1 << 3,
-    reg_intcon3_mask_INT2IE = 1 << 4,
-    reg_intcon3_mask_INT3IE = 1 << 5,
-    reg_intcon3_mask_INT1IP = 1 << 6,
-    reg_intcon3_mask_INT2IP = 1 << 7,
-};
+using interrupt::pic18f66k80_interrupt_map;
 
-enum reg_ipr1_mask_t
+std::vector<int_source_t> pic18f66k80_make_interrupt_sources(pic18f66k80_interrupt_map m)
 {
-    reg_ipr1_mask_TMR1IP = 1 << 0,
-    reg_ipr1_mask_TMR2IP = 1 << 1,
-    reg_ipr1_mask_TMR1GIP = 1 << 2,
-    reg_ipr1_mask_SSPIP = 1 << 3,
-    reg_ipr1_mask_TX1IP = 1 << 4,
-    reg_ipr1_mask_RC1IP = 1 << 5,
-    reg_ipr1_mask_ADIP = 1 << 6,
-    reg_ipr1_mask_PSPIP = 1 << 7,
-};
-
-enum reg_pir1_mask_t
-{
-    reg_pir1_mask_TMR1IF = 1 << 0,
-    reg_pir1_mask_TMR2IF = 1 << 1,
-    reg_pir1_mask_TMR1GIF = 1 << 2,
-    reg_pir1_mask_SSPIF = 1 << 3,
-    reg_pir1_mask_TX1IF = 1 << 4,
-    reg_pir1_mask_RC1IF = 1 << 5,
-    reg_pir1_mask_ADIF = 1 << 6,
-    reg_pir1_mask_PSPIF = 1 << 7,
-};
-
-enum reg_pie1_mask_t
-{
-    reg_pie1_mask_TMR1IE = 1 << 0,
-    reg_pie1_mask_TMR2IE = 1 << 1,
-    reg_pie1_mask_TMR1GIE = 1 << 2,
-    reg_pie1_mask_SSPIE = 1 << 3,
-    reg_pie1_mask_TX1IE = 1 << 4,
-    reg_pie1_mask_RC1IE = 1 << 5,
-    reg_pie1_mask_ADIE = 1 << 6,
-    reg_pie1_mask_PSPIE = 1 << 7,
-};
-
-enum reg_ipr2_mask_t
-{
-    reg_ipr2_mask_TMR3GIP = 1 << 0,
-    reg_ipr2_mask_TMR3IP = 1 << 1,
-    reg_ipr2_mask_HLVDIP = 1 << 2,
-    reg_ipr2_mask_BCLIP = 1 << 3,
-    reg_ipr2_mask_OSCFIP = 1 << 7,
-};
-
-enum reg_pir2_mask_t
-{
-    reg_pir2_mask_TMR3GIF = 1 << 0,
-    reg_pir2_mask_TMR3IF = 1 << 1,
-    reg_pir2_mask_HLVDIF = 1 << 2,
-    reg_pir2_mask_BCLIF = 1 << 3,
-    reg_pir2_mask_OSCFIF = 1 << 7,
-};
-
-enum reg_pie2_mask_t
-{
-    reg_pie2_mask_TMR3GIE = 1 << 0,
-    reg_pie2_mask_TMR3IE = 1 << 1,
-    reg_pie2_mask_HLVDIE = 1 << 2,
-    reg_pie2_mask_BCLIE = 1 << 3,
-    reg_pie2_mask_OSCFIE = 1 << 7,
-};
-
-enum reg_ipr3_mask_t
-{
-    reg_ipr3_mask_CCP1IP = 1 << 1,
-    reg_ipr3_mask_CCP2IP = 1 << 2,
-    reg_ipr3_mask_CTMUIP = 1 << 3,
-    reg_ipr3_mask_TX2IP = 1 << 4,
-    reg_ipr3_mask_RC2IP = 1 << 5,
-};
-
-enum reg_pir3_mask_t
-{
-    reg_pir3_mask_CCP1IF = 1 << 1,
-    reg_pir3_mask_CCP2IF = 1 << 2,
-    reg_pir3_mask_CTMUIF = 1 << 3,
-    reg_pir3_mask_TX2IF = 1 << 4,
-    reg_pir3_mask_RC2IF = 1 << 5,
-};
-
-enum reg_pie3_mask_t
-{
-    reg_pir3_mask_CCP1IE = 1 << 1,
-    reg_pir3_mask_CCP2IE = 1 << 2,
-    reg_pir3_mask_CTMUIE = 1 << 3,
-    reg_pir3_mask_TX2IE = 1 << 4,
-    reg_pir3_mask_RC2IE = 1 << 5,
-};
-
-enum reg_ipr4_mask_t
-{
-    reg_ipr4_mask_CCP3IP = 1 << 0,
-    reg_ipr4_mask_CCP4IP = 1 << 1,
-    reg_ipr4_mask_CCP5IP = 1 << 2,
-    reg_ipr4_mask_CMP1IP = 1 << 4,
-    reg_ipr4_mask_CMP2IP = 1 << 5,
-    reg_ipr4_mask_EEIP = 1 << 6,
-    reg_ipr4_mask_TMR4IP = 1 << 7,
-};
-
-enum reg_pir4_mask_t
-{
-    reg_pir4_mask_CCP3IF = 1 << 0,
-    reg_pir4_mask_CCP4IF = 1 << 1,
-    reg_pir4_mask_CCP5IF = 1 << 2,
-    reg_pir4_mask_CMP1IF = 1 << 4,
-    reg_pir4_mask_CMP2IF = 1 << 5,
-    reg_pir4_mask_EEIF = 1 << 6,
-    reg_pir4_mask_TMR4IF = 1 << 7,
-};
-
-enum reg_pie4_mask_t
-{
-    reg_pie4_mask_CCP3IE = 1 << 0,
-    reg_pie4_mask_CCP4IE = 1 << 1,
-    reg_pie4_mask_CCP5IE = 1 << 2,
-    reg_pie4_mask_CMP1IE = 1 << 4,
-    reg_pie4_mask_CMP2IE = 1 << 5,
-    reg_pie4_mask_EEIE = 1 << 6,
-    reg_pie4_mask_TMR4IE = 1 << 7,
-};
-
-enum reg_ipr5_mask_t
-{
-    reg_ipr5_mask_RXB0IP = 1 << 0,
-    reg_ipr5_mask_RXB1IP = 1 << 1,
-    reg_ipr5_mask_TXB0IP = 1 << 2,
-    reg_ipr5_mask_TXB1IP = 1 << 3,
-    reg_ipr5_mask_TXB2IP = 1 << 4,
-    reg_ipr5_mask_ERRIP = 1 << 5,
-    reg_ipr5_mask_WAKIP = 1 << 6,
-    reg_ipr5_mask_IRXIP = 1 << 7,
-};
-
-enum reg_pir5_mask_t
-{
-    reg_pir5_mask_RXB0IF = 1 << 0,
-    reg_pir5_mask_RXB1IF = 1 << 1,
-    reg_pir5_mask_TXB0IF = 1 << 2,
-    reg_pir5_mask_TXB1IF = 1 << 3,
-    reg_pir5_mask_TXB2IF = 1 << 4,
-    reg_pir5_mask_ERRIF = 1 << 5,
-    reg_pir5_mask_WAKIF = 1 << 6,
-    reg_pir5_mask_IRXIF = 1 << 7,
-};
-
-enum reg_pie5_mask_t
-{
-    reg_pie5_mask_RXB0IE = 1 << 0,
-    reg_pie5_mask_RXB1IE = 1 << 1,
-    reg_pie5_mask_TXB0IE = 1 << 2,
-    reg_pie5_mask_TXB1IE = 1 << 3,
-    reg_pie5_mask_TXB2IE = 1 << 4,
-    reg_pie5_mask_ERRIE = 1 << 5,
-    reg_pie5_mask_WAKIE = 1 << 6,
-    reg_pie5_mask_IRXIE = 1 << 7,
-};
+    return std::vector<int_source_t>{
+        m.INT0, m.INT1, m.INT2, m.INT3, m.RB,   m.TMR0, m.TMR1, m.TMR1G, m.TMR2, m.TMR3, m.TMR3G, m.TMR4, m.CCP1,
+        m.CCP2, m.CCP3, m.CCP4, m.CCP5, m.EE,   m.CMP1, m.CMP2, m.CTMU,  m.PSP,  m.AD,   m.SSP,   m.OSC,  m.TX1,
+        m.TX2,  m.RC1,  m.RC2,  m.BCL,  m.HLVD, m.IRX,  m.WAK,  m.ERR,   m.TX2B, m.TXB1, m.TXB0,  m.RXB1, m.RXB0,
+    };
+}

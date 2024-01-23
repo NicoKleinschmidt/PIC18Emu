@@ -210,7 +210,8 @@ struct cpu_t
     std::function<void(cpu_t &cpu, instruction_t &instruction)> next_action;
 
     std::function<void(bool high_prio, bool enabled)> global_interrupt_enable;
-    tbl_ctx_t tbl;
+    std::function<void(tblptr_action_t action)> table_read;
+    std::function<void(tblptr_action_t action)> table_write;
 
     std::array<uint32_t, 31> hw_stack;
     uint8_t stkptr;
