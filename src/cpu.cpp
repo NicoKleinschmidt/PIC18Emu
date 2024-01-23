@@ -2,6 +2,7 @@
 #include "18f66k80.hpp"
 #include "alu.hpp"
 #include "config.hpp"
+#include <bit>
 #include <environment.hpp>
 #include <iostream>
 
@@ -902,7 +903,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         else if (instruction.table_op.n == 3)
             action = tblptr_action_t::preinc;
 
-        tbl_read(cpu.tbl, read_prog_bus, action);
+        cpu.table_read(action);
 
         // Wait one tick
         cpu.pc -= 2;
@@ -919,7 +920,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         else if (instruction.table_op.n == 3)
             action = tblptr_action_t::preinc;
 
-        tbl_write(cpu.tbl, write_prog_bus, action);
+        cpu.table_write(action);
 
         // Wait one tick
         cpu.pc -= 2;
@@ -1133,7 +1134,7 @@ decode_result_t cpu_decode(uint16_t instruction)
         op = opcode_t::NOP1;
 
     return decode_result_t{
-        .instruction = *reinterpret_cast<instruction_t *>(&instruction),
+        .instruction = std::bit_cast<instruction_t>(instruction),
         .opcode = op,
     };
 }

@@ -48,11 +48,6 @@ int main(int argc, char **argv)
     std::string program_file_name = argv[1];
 
     cpu_t cpu;
-    tbl_initialize(cpu.tbl);
-    cpu.tbl.TABLAT = static_cast<uint16_t>(pic18f66k80_sfr_map::TABLAT);
-    cpu.tbl.TBLPTRL = static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRL);
-    cpu.tbl.TBLPTRH = static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRH);
-    cpu.tbl.TBLPTRU = static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRU);
 
     memory_t<0x600> sram = {
         .start_address = 0x00,
@@ -109,25 +104,8 @@ int main(int argc, char **argv)
         .PLUSW2 = static_cast<uint16_t>(pic18f66k80_sfr_map::PLUSW2),
     };
 
-    int_known_sfrs_18f66k80_t pic18f66k80_int_regs = {
+    int_known_sfrs_t pic18f66k80_int_regs = {
         .INTCON = static_cast<uint16_t>(pic18f66k80_sfr_map::INTCON),
-        .INTCON2 = static_cast<uint16_t>(pic18f66k80_sfr_map::INTCON2),
-        .INTCON3 = static_cast<uint16_t>(pic18f66k80_sfr_map::INTCON3),
-        .PIR1 = static_cast<uint16_t>(pic18f66k80_sfr_map::PIR1),
-        .PIE1 = static_cast<uint16_t>(pic18f66k80_sfr_map::PIE1),
-        .IPR1 = static_cast<uint16_t>(pic18f66k80_sfr_map::IPR1),
-        .PIR2 = static_cast<uint16_t>(pic18f66k80_sfr_map::PIR2),
-        .PIE2 = static_cast<uint16_t>(pic18f66k80_sfr_map::PIE2),
-        .IPR2 = static_cast<uint16_t>(pic18f66k80_sfr_map::IPR2),
-        .PIR3 = static_cast<uint16_t>(pic18f66k80_sfr_map::PIR3),
-        .PIE3 = static_cast<uint16_t>(pic18f66k80_sfr_map::PIE3),
-        .IPR3 = static_cast<uint16_t>(pic18f66k80_sfr_map::IPR3),
-        .PIR4 = static_cast<uint16_t>(pic18f66k80_sfr_map::PIR4),
-        .PIE4 = static_cast<uint16_t>(pic18f66k80_sfr_map::PIE4),
-        .IPR4 = static_cast<uint16_t>(pic18f66k80_sfr_map::IPR4),
-        .PIR5 = static_cast<uint16_t>(pic18f66k80_sfr_map::PIR5),
-        .PIE5 = static_cast<uint16_t>(pic18f66k80_sfr_map::PIE5),
-        .IPR5 = static_cast<uint16_t>(pic18f66k80_sfr_map::IPR5),
         .RCON = static_cast<uint16_t>(pic18f66k80_sfr_map::RCON),
     };
 
@@ -363,19 +341,22 @@ int main(int argc, char **argv)
     bank_ctx.sfr = pic18fxx2_bank_regs;
     bank_ctx.read_wreg = [&]() -> uint8_t { return cpu.wreg; };
 
-    int_state_t<39> int_state;
-    int_state_initialize_18f66k80(int_state);
-    int_state_reset_18f66k80(int_state);
+    int_ctx_t interrupts;
+    interrupt_initialize(interrupts);
+    interrupts.sfr = pic18f66k80_int_regs;
+
+    pic18f66k80_interrupt_map interrupt;
+    interrupts.sources = pic18f66k80_make_interrupt_sources(interrupt);
 
     cpu.global_interrupt_enable = [&](bool high_prio, bool enabled) {
         if (high_prio)
-            int_state.GIEH = enabled;
+            interrupts.GIEH = enabled;
         else
-            int_state.GIEL = enabled;
+            interrupts.GIEL = enabled;
     };
 
     auto on_portb_changed = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.INTCON, 1, set);
+        interrupt_set_flag(interrupt.RB, set);
     };
 
     gpio_add_change_interrupt(gpiob, 7, on_portb_changed);
@@ -384,23 +365,23 @@ int main(int argc, char **argv)
     gpio_add_change_interrupt(gpiob, 4, on_portb_changed);
 
     auto on_timer0_overflow = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.INTCON, 3, set);
+        interrupt_set_flag(interrupt.TMR0, set);
     };
 
     auto on_timer1_overflow = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR1, 1, set);
+        interrupt_set_flag(interrupt.TMR1, set);
     };
 
     auto on_timer2_match = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR1, 2, set);
+        interrupt_set_flag(interrupt.TMR2, set);
     };
 
     auto on_timer3_overflow = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR2, 2, set);
+        interrupt_set_flag(interrupt.TMR3, set);
     };
 
     auto on_timer4_match = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR4, 7, set);
+        interrupt_set_flag(interrupt.TMR4, set);
     };
 
     timer0_t timer0;
@@ -422,7 +403,7 @@ int main(int argc, char **argv)
     adc_ctx_t adc;
     adc_initialize(adc, pic18f66k80_adc_regs);
     adc.done_interrupt = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR1, 6, set);
+        interrupt_set_flag(interrupt.AD, set);
     };
 
     eusart_ctx_t eusart1;
@@ -444,16 +425,16 @@ int main(int argc, char **argv)
         eusart_import_tx_done(eusart2);
     };
     eusart1.rx_interrupt = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR1, 5, set);
+        interrupt_set_flag(interrupt.RC1, set);
     };
     eusart2.rx_interrupt = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR3, 5, set);
+        interrupt_set_flag(interrupt.RC2, set);
     };
     eusart1.tx_interrupt = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR1, 4, set);
+        interrupt_set_flag(interrupt.TX1, set);
     };
     eusart2.tx_interrupt = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR3, 4, set);
+        interrupt_set_flag(interrupt.TX2, set);
     };
 
     auto ccpx_special_event_tigger = [&](uint8_t timer_num, uint8_t ccp_num) {
@@ -481,21 +462,11 @@ int main(int argc, char **argv)
     ccp3.special_event_timer = [&](uint8_t timer_num) { ccpx_special_event_tigger(timer_num, 3); };
     ccp4.special_event_timer = [&](uint8_t timer_num) { ccpx_special_event_tigger(timer_num, 4); };
     ccp5.special_event_timer = [&](uint8_t timer_num) { ccpx_special_event_tigger(timer_num, 5); };
-    ccp1.interrupt = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR3, 1, set);
-    };
-    ccp2.interrupt = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR3, 2, set);
-    };
-    ccp3.interrupt = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR4, 0, set);
-    };
-    ccp4.interrupt = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR4, 1, set);
-    };
-    ccp5.interrupt = [&](bool set) {
-        int_set_flag(int_state, pic18f66k80_int_regs, pic18f66k80_int_regs.PIR4, 2, set);
-    };
+    ccp1.interrupt = [&](bool set) { interrupt_set_flag(interrupt.CCP1, set); };
+    ccp2.interrupt = [&](bool set) { interrupt_set_flag(interrupt.CCP2, set); };
+    ccp3.interrupt = [&](bool set) { interrupt_set_flag(interrupt.CCP3, set); };
+    ccp4.interrupt = [&](bool set) { interrupt_set_flag(interrupt.CCP4, set); };
+    ccp5.interrupt = [&](bool set) { interrupt_set_flag(interrupt.CCP5, set); };
 
     timer2.output = [&]() {
         ccp_pwm_match_input(ccp1, 2, read_data_bus);
@@ -513,6 +484,13 @@ int main(int argc, char **argv)
         ccp_pwm_match_input(ccp5, 4, read_data_bus);
     };
 
+    tbl_ctx_t tbl;
+    tbl_initialize(tbl);
+    tbl.TABLAT = static_cast<uint16_t>(pic18f66k80_sfr_map::TABLAT);
+    tbl.TBLPTRL = static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRL);
+    tbl.TBLPTRH = static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRH);
+    tbl.TBLPTRU = static_cast<uint16_t>(pic18f66k80_sfr_map::TBLPTRU);
+
     read_data_bus = [&](uint16_t addr) -> uint8_t {
         addr_read_result_t result;
         uint8_t value = 0;
@@ -521,9 +499,9 @@ int main(int argc, char **argv)
         value |= result.data & result.mask;
         result = bank_bus_read(bank_ctx, addr);
         value |= result.data & result.mask;
-        result = tbl_bus_read(cpu.tbl, addr);
+        result = tbl_bus_read(tbl, addr);
         value |= result.data & result.mask;
-        result = int_addr_space_read_18f66k80(int_state, pic18f66k80_int_regs, addr);
+        result = interrupt_bus_read(interrupts, addr);
         value |= result.data & result.mask;
         result = gpio_bus_read(gpioa, addr);
         value |= result.data & result.mask;
@@ -589,8 +567,8 @@ int main(int argc, char **argv)
     write_data_bus = [&](uint16_t addr, uint8_t val) {
         cpu_bus_write(cpu, pic18fxx2_cpu_regs, addr, val);
         bank_bus_write(bank_ctx, addr, val);
-        tbl_bus_write(cpu.tbl, addr, val);
-        int_addr_space_write_18f66k80(int_state, pic18f66k80_int_regs, addr, val);
+        tbl_bus_write(tbl, addr, val);
+        interrupt_bus_write(interrupts, addr, val),
         gpio_bus_write(gpioa, addr, val);
         gpio_bus_write(gpiob, addr, val);
         gpio_bus_write(gpioc, addr, val);
@@ -683,6 +661,12 @@ int main(int argc, char **argv)
         }
         sleep = false;
     };
+
+    cpu.table_read = [&tbl, read_prog_bus](tblptr_action_t action) { tbl_read(tbl, read_prog_bus, action); };
+    cpu.table_write = [&tbl, write_prog_bus](tblptr_action_t action) { tbl_write(tbl, write_prog_bus, action); };
+
+    interrupts.vector = interrupt_vector;
+    interrupts.wakeup = wakeup;
 
     auto pin_output = [](char port_id, uint8_t pin, io_state_t state) {
         std::string state_str = "Error";
@@ -786,7 +770,7 @@ int main(int argc, char **argv)
 
     auto por_reset = [&]() {
         cpu_reset_por(cpu);
-        int_state_reset_18f66k80(int_state);
+        interrupt_reset(interrupts);
         timer0_reset(timer0);
         timer1_reset(timer1);
         timer2_reset(timer2);
@@ -819,7 +803,7 @@ int main(int argc, char **argv)
         if (stop)
             break;
 
-        interrupt_tick(read_prog_bus, int_state, interrupt_vector, wakeup);
+        interrupt_tick(interrupts);
         timer0_tick(timer0, read_data_bus);
         timer1_tick(timer1, read_data_bus);
         timer2_tick(timer2, read_data_bus);
