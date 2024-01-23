@@ -2,7 +2,6 @@
 #include "18f66k80.hpp"
 #include "alu.hpp"
 #include "config.hpp"
-#include <bit>
 #include <environment.hpp>
 #include <iostream>
 
@@ -1134,7 +1133,7 @@ decode_result_t cpu_decode(uint16_t instruction)
         op = opcode_t::NOP1;
 
     return decode_result_t{
-        .instruction = std::bit_cast<instruction_t>(instruction),
+        .instruction = *reinterpret_cast<instruction_t *>(&instruction),
         .opcode = op,
     };
 }
