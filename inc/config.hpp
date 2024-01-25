@@ -38,11 +38,4 @@ enum class configuration_bit_t
 };
 // clang-format on
 
-struct configuration_bit_info_t
-{
-    configuration_register_t file;
-    uint8_t bit;
-    bool invert;
-};
-
 bool configuration_check_bit(configuration_bit_t bit, bus_reader_t<uint32_t, uint8_t> read_bus);
