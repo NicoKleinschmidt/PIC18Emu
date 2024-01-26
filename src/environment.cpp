@@ -103,12 +103,12 @@ void env_bus_read(uint16_t address, uint8_t val)
 {
     if (address <= register_names_max && address > register_names_max - register_names_size)
     {
-        std::cerr << "R: " << register_names[register_names_max - address] << " <- 0x" << std::setw(2) << std::hex
+        std::cerr << "R: " << register_names[register_names_max - address] << " -> 0x" << std::setw(2) << std::hex
                   << static_cast<int>(val) << "\n";
     }
     else
     {
-        std::cerr << "R: 0x" << std::setfill('0') << std::setw(4) << std::hex << address << " <- 0x" << std::setw(2)
+        std::cerr << "R: 0x" << std::setfill('0') << std::setw(4) << std::hex << address << " -> 0x" << std::setw(2)
                   << std::hex << static_cast<int>(val) << "\n";
     }
 }

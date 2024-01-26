@@ -116,7 +116,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     env_cpu_current_instruction(decoded, decoded_addr);
 
-    bool xinst = configuration_check_bit(configuration_bit_t::XINST, read_prog_bus);
+    bool xinst = configuration_check_bit(CONFIG::XINST, read_prog_bus);
 
     if (decoded.opcode == opcode_t::ILLEGAL)
     {
@@ -1175,7 +1175,7 @@ bool cpu_stack_push(cpu_t &cpu, uint32_t value, bus_reader_t<uint32_t, uint8_t> 
     if (cpu.stkful)
     {
         // Check if the cpu should be reset because stack became full.
-        bool reset_on_full = configuration_check_bit(configuration_bit_t::STVREN, read_prog_bus);
+        bool reset_on_full = configuration_check_bit(CONFIG::STVREN, read_prog_bus);
 
         if (reset_on_full)
         {
@@ -1193,7 +1193,7 @@ bool cpu_stack_pop(cpu_t &cpu, bus_reader_t<uint32_t, uint8_t> read_prog_bus)
     {
         cpu.stkunf = true;
 
-        bool reset_on_underflow = configuration_check_bit(configuration_bit_t::STVREN, read_prog_bus);
+        bool reset_on_underflow = configuration_check_bit(CONFIG::STVREN, read_prog_bus);
 
         if (reset_on_underflow)
         {

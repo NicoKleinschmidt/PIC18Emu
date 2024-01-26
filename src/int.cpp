@@ -129,7 +129,7 @@ static addr_bit_mask_t write_sources(std::vector<int_source_t> &sources, uint16_
         {
             if (!src.flag_read_only)
             {
-                src.flagged = value & (1 << src.flagged);
+                src.flagged = value & (1 << src.flag_bit);
             }
             mask |= (1 << src.flag_bit);
         }
