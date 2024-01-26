@@ -36,18 +36,29 @@ void test_2s_complement()
     std::cout << "2 = " << result << "\n";
 }
 
+static uint16_t get_fsr2(const cpu_known_sfrs_t &sfr, bus_reader_t<uint16_t, uint8_t> read_bus)
+{
+    uint8_t low = read_bus(sfr.FSR2L);
+    uint8_t high = read_bus(sfr.FSR2L + 1);
+    return (high << 8) | low;
+}
+
 /// @brief Reads a value from the bank specified by the BSR register or the access bank.
 /// @param location The 8 bit address of the value in the bank.
 /// @param use_bsr If false, the value will be read from the access bank instead of the one specified by BSR
-static uint8_t cpu_read_from_bank(const cpu_known_sfrs_t &sfr, bus_reader_t<uint16_t, uint8_t> read_bus,
-                                  uint8_t location, bool use_bsr)
+/// @param x_inst Wether or not the extended instruction set is enabled
+static uint8_t read_bus(const cpu_known_sfrs_t &sfr, bus_reader_t<uint16_t, uint8_t> read_bus, uint8_t location,
+                        bool use_bsr, bool x_inst)
 {
     if (!use_bsr)
     {
-        if (location < 0x80)
-            return read_bus(location);
-        else
+        if (x_inst && location < 0x60)
+            return read_bus(get_fsr2(sfr, read_bus) + location);
+
+        if (location >= 0x80)
             return read_bus(0xF00 + location);
+
+        return read_bus(location);
     }
 
     uint8_t bank = read_bus(static_cast<uint16_t>(sfr.BSR));
@@ -58,15 +69,20 @@ static uint8_t cpu_read_from_bank(const cpu_known_sfrs_t &sfr, bus_reader_t<uint
 /// @brief Writes a value to the bank specified by the BSR register or the access bank.
 /// @param location The 8 bit address of the value in the bank.
 /// @param use_bsr If false, the value will be written to the access bank instead of the one specified by BSR
-static void cpu_write_to_bank(const cpu_known_sfrs_t &sfr, bus_writer_t<uint16_t, uint8_t> write_bus,
-                              bus_reader_t<uint16_t, uint8_t> read_bus, uint8_t location, uint8_t val, bool use_bsr)
+/// @param x_inst Wether or not the extended instruction set is enabled
+static void write_bus(const cpu_known_sfrs_t &sfr, bus_writer_t<uint16_t, uint8_t> write_bus,
+                      bus_reader_t<uint16_t, uint8_t> read_bus, uint8_t location, uint8_t val, bool use_bsr,
+                      bool x_inst)
 {
     if (!use_bsr)
     {
-        if (location < 0x80)
-            return write_bus(location, val);
-        else
+        if (x_inst && location < 0x60)
+            return write_bus(get_fsr2(sfr, read_bus) + location, val);
+
+        if (location >= 0x80)
             return write_bus(0xF00 + location, val);
+
+        return write_bus(location, val);
     }
 
     uint8_t bank = read_bus(static_cast<uint16_t>(sfr.BSR));
@@ -100,7 +116,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     env_cpu_current_instruction(decoded, decoded_addr);
 
-    bool xinst_enabled = configuration_check_bit(configuration_bit_t::XINST, read_prog_bus);
+    bool xinst = configuration_check_bit(CONFIG::XINST, read_prog_bus);
 
     if (decoded.opcode == opcode_t::ILLEGAL)
     {
@@ -112,7 +128,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     switch (decoded.opcode)
     {
     case opcode_t::ADDFSR: {
-        if (!xinst_enabled)
+        if (!xinst)
             break;
 
         uint16_t fsrl_offset;
@@ -149,24 +165,24 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::ADDWF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_add(cpu.wreg, val, cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
     }
 
     case opcode_t::ADDWFC: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_add(cpu.wreg, val, (cpu.status & alu_status_C), cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
@@ -178,12 +194,12 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::ANDWF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_and(cpu.wreg, val, cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
@@ -199,10 +215,10 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::BCF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.bit_oriented.f, instruction.bit_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.bit_oriented.f, instruction.bit_oriented.a, xinst);
         val &= ~(1 << instruction.bit_oriented.bit);
-        cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.bit_oriented.f, val,
-                          instruction.bit_oriented.a);
+        write_bus(sfr, write_data_bus, read_data_bus, instruction.bit_oriented.f, val, instruction.bit_oriented.a,
+                  xinst);
         break;
     }
 
@@ -259,15 +275,15 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::BSF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.bit_oriented.f, instruction.bit_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.bit_oriented.f, instruction.bit_oriented.a, xinst);
         val |= (1 << instruction.bit_oriented.bit);
-        cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.bit_oriented.f, val,
-                          instruction.bit_oriented.a);
+        write_bus(sfr, write_data_bus, read_data_bus, instruction.bit_oriented.f, val, instruction.bit_oriented.a,
+                  xinst);
         break;
     }
 
     case opcode_t::BTFSC: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.bit_oriented.f, instruction.bit_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.bit_oriented.f, instruction.bit_oriented.a, xinst);
         bool is_set = val & (1 << instruction.bit_oriented.bit);
         if (!is_set)
         {
@@ -277,7 +293,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::BTFSS: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.bit_oriented.f, instruction.bit_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.bit_oriented.f, instruction.bit_oriented.a, xinst);
         bool is_set = val & (1 << instruction.bit_oriented.bit);
         if (is_set)
         {
@@ -287,10 +303,10 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::BTG: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.bit_oriented.f, instruction.bit_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.bit_oriented.f, instruction.bit_oriented.a, xinst);
         val ^= (1 << instruction.bit_oriented.bit);
-        cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.bit_oriented.f, val,
-                          instruction.bit_oriented.a);
+        write_bus(sfr, write_data_bus, read_data_bus, instruction.bit_oriented.f, val, instruction.bit_oriented.a,
+                  xinst);
         break;
     }
 
@@ -335,7 +351,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::CALLW: {
-        if (!xinst_enabled)
+        if (!xinst)
             break;
 
         if (!cpu_stack_push(cpu, cpu.pc, read_prog_bus))
@@ -349,9 +365,9 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::CLRF: {
-        (void)cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, 0,
-                          instruction.byte_oriented.a);
+        (void)read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
+        write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, 0, instruction.byte_oriented.a,
+                  xinst);
         cpu.status |= alu_status_Z;
         break;
     }
@@ -365,19 +381,19 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::COMF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_complement(val, cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
     }
 
     case opcode_t::CPFSEQ: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         if (val == cpu.wreg)
         {
             cpu.fetched_instruction = 0x0000; // NOP
@@ -386,7 +402,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::CPFSGT: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         if (val > cpu.wreg)
         {
             cpu.fetched_instruction = 0x0000; // NOP
@@ -395,7 +411,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::CPFSLT: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         if (val < cpu.wreg)
         {
             cpu.fetched_instruction = 0x0000; // NOP
@@ -410,24 +426,24 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::DECF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_sub(val, 1, cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
     }
 
     case opcode_t::DECFSZ: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = val - 1;
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
 
@@ -439,12 +455,12 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::DCFSNZ: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = val - 1;
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
 
@@ -466,24 +482,24 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::INCF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_add(val, 1, cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
     }
 
     case opcode_t::INCFSZ: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = val + 1;
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
 
@@ -495,12 +511,12 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::INFSNZ: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = val + 1;
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
 
@@ -517,12 +533,12 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::IORWF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_or(cpu.wreg, val, cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
@@ -545,7 +561,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::MOVF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         cpu.status &= ~alu_status_N;
         cpu.status &= ~alu_status_Z;
 
@@ -555,8 +571,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             cpu.status |= alu_status_N;
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, val,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, val, instruction.byte_oriented.a,
+                      xinst);
         else
             cpu.wreg = val;
         break;
@@ -589,7 +605,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::MOVSF: {
-        if (!xinst_enabled)
+        if (!xinst)
             break;
 
         uint8_t fsr2l = read_data_bus(sfr.FSR2L);
@@ -604,7 +620,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::MOVSS: {
-        if (!xinst_enabled)
+        if (!xinst)
             break;
 
         uint8_t fsr2l = read_data_bus(sfr.FSR2L);
@@ -622,8 +638,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::MOVWF: {
-        cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, cpu.wreg,
-                          instruction.byte_oriented.a);
+        write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, cpu.wreg,
+                  instruction.byte_oriented.a, xinst);
         break;
     }
 
@@ -635,7 +651,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::MULWF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint16_t result = static_cast<uint16_t>(cpu.wreg) * static_cast<uint16_t>(val);
         write_data_bus(static_cast<uint16_t>(sfr.PRODH), (result >> 8) & 0xFF);
         write_data_bus(static_cast<uint16_t>(sfr.PRODL), result & 0xFF);
@@ -643,11 +659,11 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::NEGF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_negate(val, cpu.status);
 
-        cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                          instruction.byte_oriented.a);
+        write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result, instruction.byte_oriented.a,
+                  xinst);
         break;
     }
 
@@ -670,7 +686,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::PUSHL: {
-        if (!xinst_enabled)
+        if (!xinst)
             break;
 
         uint8_t fsr2l = read_data_bus(sfr.FSR2L);
@@ -745,57 +761,57 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::RLCF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_rotate_left_carry(val, cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
     }
 
     case opcode_t::RLNCF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_rotate_left(val, cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
     }
 
     case opcode_t::RRCF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_rotate_right_carry(val, cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
     }
 
     case opcode_t::RRNCF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_rotate_right(val, cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
     }
 
     case opcode_t::SETF: {
-        (void)cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
-        cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, 0xFF,
-                          instruction.byte_oriented.a);
+        (void)read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
+        write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, 0xFF, instruction.byte_oriented.a,
+                  xinst);
         break;
     }
 
@@ -809,7 +825,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::SUBFSR: {
-        if (!xinst_enabled)
+        if (!xinst)
             break;
 
         uint16_t fsrl_offset;
@@ -841,12 +857,12 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::SUBFWB: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_sub(cpu.wreg, val, !(cpu.status & alu_status_C), cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
@@ -858,36 +874,36 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::SUBWF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_sub(val, cpu.wreg, cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
     }
 
     case opcode_t::SUBWFB: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_sub(val, cpu.wreg, !(cpu.status & alu_status_C), cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
     }
 
     case opcode_t::SWAPF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = (val << 4) | (val >> 4);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
@@ -928,7 +944,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::TSTFSZ: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         if (val == 0)
         {
             cpu.fetched_instruction = 0x0000; // NOP
@@ -942,12 +958,12 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     }
 
     case opcode_t::XORWF: {
-        uint8_t val = cpu_read_from_bank(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a);
+        uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         uint8_t result = alu_xor(cpu.wreg, val, cpu.status);
 
         if (instruction.byte_oriented.d)
-            cpu_write_to_bank(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
-                              instruction.byte_oriented.a);
+            write_bus(sfr, write_data_bus, read_data_bus, instruction.byte_oriented.f, result,
+                      instruction.byte_oriented.a, xinst);
         else
             cpu.wreg = result;
         break;
@@ -1159,7 +1175,7 @@ bool cpu_stack_push(cpu_t &cpu, uint32_t value, bus_reader_t<uint32_t, uint8_t> 
     if (cpu.stkful)
     {
         // Check if the cpu should be reset because stack became full.
-        bool reset_on_full = configuration_check_bit(configuration_bit_t::STVREN, read_prog_bus);
+        bool reset_on_full = configuration_check_bit(CONFIG::STVREN, read_prog_bus);
 
         if (reset_on_full)
         {
@@ -1177,7 +1193,7 @@ bool cpu_stack_pop(cpu_t &cpu, bus_reader_t<uint32_t, uint8_t> read_prog_bus)
     {
         cpu.stkunf = true;
 
-        bool reset_on_underflow = configuration_check_bit(configuration_bit_t::STVREN, read_prog_bus);
+        bool reset_on_underflow = configuration_check_bit(CONFIG::STVREN, read_prog_bus);
 
         if (reset_on_underflow)
         {

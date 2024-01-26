@@ -1,6 +1,7 @@
 #pragma once
 
 #include "int.hpp"
+#include <cstring>
 
 // clang-format off
 enum class pic18f66k80_sfr_map
@@ -133,58 +134,68 @@ constexpr uint16_t a(pic18f66k80_sfr_map sfr)
 using REG = pic18f66k80_sfr_map;
 using enum int_make_source_flags_t;
 
-struct pic18f66k80_interrupt_map
+constexpr std::vector<int_source_t> pic18f66k80_make_interrupt_map()
 {
-    int_source_t INT0 = int_make_source(a(REG::INTCON), 4, a(REG::INTCON), 1, 0, 0);
-    int_source_t INT1 = int_make_source(a(REG::INTCON3), 3, a(REG::INTCON3), 0, a(REG::INTCON3), 6);
-    int_source_t INT2 = int_make_source(a(REG::INTCON3), 4, a(REG::INTCON3), 1, a(REG::INTCON3), 7);
-    int_source_t INT3 = int_make_source(a(REG::INTCON3), 5, a(REG::INTCON3), 2, a(REG::INTCON2), 1);
-    int_source_t RB = int_make_source(a(REG::INTCON), 3, a(REG::INTCON), 0, a(REG::INTCON2), 0);
-    int_source_t TMR0 = int_make_source(a(REG::INTCON), 7, a(REG::INTCON), 2, a(REG::INTCON2), 2);
-    int_source_t TMR1 = int_make_source(a(REG::PIE1), 0, a(REG::PIR1), 0, a(REG::IPR1), 0, peripheral);
-    int_source_t TMR1G = int_make_source(a(REG::PIE1), 2, a(REG::PIR1), 2, a(REG::IPR1), 2, peripheral);
-    int_source_t TMR2 = int_make_source(a(REG::PIE1), 1, a(REG::PIR1), 1, a(REG::IPR1), 1, peripheral);
-    int_source_t TMR3 = int_make_source(a(REG::PIE2), 1, a(REG::PIR2), 1, a(REG::IPR2), 1, peripheral);
-    int_source_t TMR3G = int_make_source(a(REG::PIE2), 0, a(REG::PIR2), 0, a(REG::IPR2), 0, peripheral);
-    int_source_t TMR4 = int_make_source(a(REG::PIE4), 7, a(REG::PIR4), 7, a(REG::IPR4), 7, peripheral);
-    int_source_t CCP1 = int_make_source(a(REG::PIE3), 1, a(REG::PIR3), 1, a(REG::IPR3), 1, peripheral);
-    int_source_t CCP2 = int_make_source(a(REG::PIE3), 2, a(REG::PIR3), 2, a(REG::IPR3), 2, peripheral);
-    int_source_t CCP3 = int_make_source(a(REG::PIE4), 0, a(REG::PIR4), 0, a(REG::IPR4), 0, peripheral);
-    int_source_t CCP4 = int_make_source(a(REG::PIE4), 1, a(REG::PIR4), 1, a(REG::IPR4), 1, peripheral);
-    int_source_t CCP5 = int_make_source(a(REG::PIE4), 2, a(REG::PIR4), 2, a(REG::IPR4), 2, peripheral);
-    int_source_t EE = int_make_source(a(REG::PIE4), 6, a(REG::PIR4), 6, a(REG::IPR4), 6, peripheral);
-    int_source_t CMP1 = int_make_source(a(REG::PIE4), 4, a(REG::PIR4), 4, a(REG::IPR4), 4, peripheral);
-    int_source_t CMP2 = int_make_source(a(REG::PIE4), 5, a(REG::PIR4), 5, a(REG::IPR4), 5, peripheral);
-    int_source_t CTMU = int_make_source(a(REG::PIE3), 3, a(REG::PIR3), 3, a(REG::IPR3), 3, peripheral);
-    int_source_t PSP = int_make_source(a(REG::PIE1), 7, a(REG::PIR1), 7, a(REG::IPR1), 7, peripheral);
-    int_source_t AD = int_make_source(a(REG::PIE1), 6, a(REG::PIR1), 6, a(REG::IPR1), 6, peripheral);
-    int_source_t SSP = int_make_source(a(REG::PIE1), 3, a(REG::PIR1), 3, a(REG::IPR1), 3, peripheral);
-    int_source_t OSC = int_make_source(a(REG::PIE2), 7, a(REG::PIR2), 7, a(REG::IPR2), 7, peripheral);
-    int_source_t TX1 = int_make_source(a(REG::PIE1), 4, a(REG::PIR1), 4, a(REG::IPR1), 4, peripheral | flag_ro);
-    int_source_t TX2 = int_make_source(a(REG::PIE3), 4, a(REG::PIR3), 4, a(REG::IPR3), 4, peripheral | flag_ro);
-    int_source_t RC1 = int_make_source(a(REG::PIE1), 5, a(REG::PIR1), 5, a(REG::IPR1), 5, peripheral);
-    int_source_t RC2 = int_make_source(a(REG::PIE3), 5, a(REG::PIR3), 5, a(REG::IPR3), 5, peripheral);
-    int_source_t BCL = int_make_source(a(REG::PIE2), 3, a(REG::PIR2), 3, a(REG::IPR2), 3, peripheral);
-    int_source_t HLVD = int_make_source(a(REG::PIE2), 2, a(REG::PIR2), 2, a(REG::IPR2), 2, peripheral);
-    int_source_t IRX = int_make_source(a(REG::PIE5), 7, a(REG::PIR5), 7, a(REG::IPR5), 7, peripheral);
-    int_source_t WAK = int_make_source(a(REG::PIE5), 6, a(REG::PIR5), 6, a(REG::IPR5), 6, peripheral);
-    int_source_t ERR = int_make_source(a(REG::PIE5), 5, a(REG::PIR5), 5, a(REG::IPR5), 5, peripheral);
-    int_source_t TX2B = int_make_source(a(REG::PIE5), 4, a(REG::PIR5), 4, a(REG::IPR5), 4, peripheral);
-    int_source_t TXB1 = int_make_source(a(REG::PIE5), 3, a(REG::PIR5), 3, a(REG::IPR5), 3, peripheral);
-    int_source_t TXB0 = int_make_source(a(REG::PIE5), 2, a(REG::PIR5), 2, a(REG::IPR5), 2, peripheral);
-    int_source_t RXB1 = int_make_source(a(REG::PIE5), 1, a(REG::PIR5), 1, a(REG::IPR5), 1, peripheral);
-    int_source_t RXB0 = int_make_source(a(REG::PIE5), 0, a(REG::PIR5), 0, a(REG::IPR5), 0, peripheral);
-};
+    std::vector<int_source_t> vec{
+        int_make_source("INT0", a(REG::INTCON), 4, a(REG::INTCON), 1, 0, 0),
+        int_make_source("INT1", a(REG::INTCON3), 3, a(REG::INTCON3), 0, a(REG::INTCON3), 6),
+        int_make_source("INT2", a(REG::INTCON3), 4, a(REG::INTCON3), 1, a(REG::INTCON3), 7),
+        int_make_source("INT3", a(REG::INTCON3), 5, a(REG::INTCON3), 2, a(REG::INTCON2), 1),
+        int_make_source("RB", a(REG::INTCON), 3, a(REG::INTCON), 0, a(REG::INTCON2), 0),
+        int_make_source("TMR0", a(REG::INTCON), 7, a(REG::INTCON), 2, a(REG::INTCON2), 2),
+        int_make_source("TMR1", a(REG::PIE1), 0, a(REG::PIR1), 0, a(REG::IPR1), 0, peripheral),
+        int_make_source("TMR1G", a(REG::PIE1), 2, a(REG::PIR1), 2, a(REG::IPR1), 2, peripheral),
+        int_make_source("TMR2", a(REG::PIE1), 1, a(REG::PIR1), 1, a(REG::IPR1), 1, peripheral),
+        int_make_source("TMR3", a(REG::PIE2), 1, a(REG::PIR2), 1, a(REG::IPR2), 1, peripheral),
+        int_make_source("TMR3G", a(REG::PIE2), 0, a(REG::PIR2), 0, a(REG::IPR2), 0, peripheral),
+        int_make_source("TMR4", a(REG::PIE4), 7, a(REG::PIR4), 7, a(REG::IPR4), 7, peripheral),
+        int_make_source("CCP1", a(REG::PIE3), 1, a(REG::PIR3), 1, a(REG::IPR3), 1, peripheral),
+        int_make_source("CCP2", a(REG::PIE3), 2, a(REG::PIR3), 2, a(REG::IPR3), 2, peripheral),
+        int_make_source("CCP3", a(REG::PIE4), 0, a(REG::PIR4), 0, a(REG::IPR4), 0, peripheral),
+        int_make_source("CCP4", a(REG::PIE4), 1, a(REG::PIR4), 1, a(REG::IPR4), 1, peripheral),
+        int_make_source("CCP5", a(REG::PIE4), 2, a(REG::PIR4), 2, a(REG::IPR4), 2, peripheral),
+        int_make_source("EE", a(REG::PIE4), 6, a(REG::PIR4), 6, a(REG::IPR4), 6, peripheral),
+        int_make_source("CMP1", a(REG::PIE4), 4, a(REG::PIR4), 4, a(REG::IPR4), 4, peripheral),
+        int_make_source("CMP2", a(REG::PIE4), 5, a(REG::PIR4), 5, a(REG::IPR4), 5, peripheral),
+        int_make_source("CTMU", a(REG::PIE3), 3, a(REG::PIR3), 3, a(REG::IPR3), 3, peripheral),
+        int_make_source("PSP", a(REG::PIE1), 7, a(REG::PIR1), 7, a(REG::IPR1), 7, peripheral),
+        int_make_source("AD", a(REG::PIE1), 6, a(REG::PIR1), 6, a(REG::IPR1), 6, peripheral),
+        int_make_source("SSP", a(REG::PIE1), 3, a(REG::PIR1), 3, a(REG::IPR1), 3, peripheral),
+        int_make_source("OSC", a(REG::PIE2), 7, a(REG::PIR2), 7, a(REG::IPR2), 7, peripheral),
+        int_make_source("TX1", a(REG::PIE1), 4, a(REG::PIR1), 4, a(REG::IPR1), 4, peripheral | flag_ro),
+        int_make_source("TX2", a(REG::PIE3), 4, a(REG::PIR3), 4, a(REG::IPR3), 4, peripheral | flag_ro),
+        int_make_source("RC1", a(REG::PIE1), 5, a(REG::PIR1), 5, a(REG::IPR1), 5, peripheral),
+        int_make_source("RC2", a(REG::PIE3), 5, a(REG::PIR3), 5, a(REG::IPR3), 5, peripheral),
+        int_make_source("BCL", a(REG::PIE2), 3, a(REG::PIR2), 3, a(REG::IPR2), 3, peripheral),
+        int_make_source("HLVD", a(REG::PIE2), 2, a(REG::PIR2), 2, a(REG::IPR2), 2, peripheral),
+        int_make_source("IRX", a(REG::PIE5), 7, a(REG::PIR5), 7, a(REG::IPR5), 7, peripheral),
+        int_make_source("WAK", a(REG::PIE5), 6, a(REG::PIR5), 6, a(REG::IPR5), 6, peripheral),
+        int_make_source("ERR", a(REG::PIE5), 5, a(REG::PIR5), 5, a(REG::IPR5), 5, peripheral),
+        int_make_source("TX2B", a(REG::PIE5), 4, a(REG::PIR5), 4, a(REG::IPR5), 4, peripheral),
+        int_make_source("TXB1", a(REG::PIE5), 3, a(REG::PIR5), 3, a(REG::IPR5), 3, peripheral),
+        int_make_source("TXB0", a(REG::PIE5), 2, a(REG::PIR5), 2, a(REG::IPR5), 2, peripheral),
+        int_make_source("RXB1", a(REG::PIE5), 1, a(REG::PIR5), 1, a(REG::IPR5), 1, peripheral),
+        int_make_source("RXB0", a(REG::PIE5), 0, a(REG::PIR5), 0, a(REG::IPR5), 0, peripheral),
+    };
+
+    return vec;
+}
+
+constexpr int pic18f66k80_default_interrupt_index(const char *label)
+{
+    std::vector<int_source_t> default_sources = pic18f66k80_make_interrupt_map();
+    for (size_t i = 0; i < default_sources.size(); i++)
+    {
+        if (strcmp(label, default_sources[i].label) == 0)
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
 
 } // namespace interrupt
 
-using interrupt::pic18f66k80_interrupt_map;
-
-std::vector<int_source_t> pic18f66k80_make_interrupt_sources(pic18f66k80_interrupt_map m)
-{
-    return std::vector<int_source_t>{
-        m.INT0, m.INT1, m.INT2, m.INT3, m.RB,   m.TMR0, m.TMR1, m.TMR1G, m.TMR2, m.TMR3, m.TMR3G, m.TMR4, m.CCP1,
-        m.CCP2, m.CCP3, m.CCP4, m.CCP5, m.EE,   m.CMP1, m.CMP2, m.CTMU,  m.PSP,  m.AD,   m.SSP,   m.OSC,  m.TX1,
-        m.TX2,  m.RC1,  m.RC2,  m.BCL,  m.HLVD, m.IRX,  m.WAK,  m.ERR,   m.TX2B, m.TXB1, m.TXB0,  m.RXB1, m.RXB0,
-    };
-}
+using interrupt::pic18f66k80_default_interrupt_index;
+using interrupt::pic18f66k80_make_interrupt_map;

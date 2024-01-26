@@ -12,7 +12,9 @@ add_executable(default-test-project
     main.cpp
     src/cpu.cpp
     src/alu.cpp
-    src/reg.cpp
+    src/bank.cpp
+    src/tbl.cpp
+    src/config.cpp
     src/int.cpp
     src/timer.cpp
     src/ccp.cpp

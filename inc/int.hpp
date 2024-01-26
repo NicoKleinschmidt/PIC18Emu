@@ -22,6 +22,8 @@ struct int_source_t
     bool flagged;
     bool is_peripheral;
     bool flag_read_only;
+
+    const char *label;
 };
 
 struct int_known_sfrs_t
@@ -73,8 +75,8 @@ inline constexpr int_make_source_flags_t operator&(int_make_source_flags_t a, in
     return static_cast<int_make_source_flags_t>(static_cast<int>(a) & static_cast<int>(b));
 }
 
-constexpr int_source_t int_make_source(uint16_t ie_reg, uint8_t ie_bit, uint16_t if_reg, uint8_t if_bit,
-                                       uint16_t ip_reg, uint8_t ip_bit,
+constexpr int_source_t int_make_source(const char *label, uint16_t ie_reg, uint8_t ie_bit, uint16_t if_reg,
+                                       uint8_t if_bit, uint16_t ip_reg, uint8_t ip_bit,
                                        int_make_source_flags_t flags = int_make_source_flags_t::none)
 {
     return int_source_t{
@@ -89,5 +91,6 @@ constexpr int_source_t int_make_source(uint16_t ie_reg, uint8_t ie_bit, uint16_t
         .flagged = (flags & int_make_source_flags_t::default_flagged) != int_make_source_flags_t::none,
         .is_peripheral = (flags & int_make_source_flags_t::peripheral) != int_make_source_flags_t::none,
         .flag_read_only = (flags & int_make_source_flags_t::flag_ro) != int_make_source_flags_t::none,
+        .label = label,
     };
 }

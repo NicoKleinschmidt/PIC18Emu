@@ -38,6 +38,11 @@ static void sig_handler(int s)
         signal_handler(s);
 }
 
+constexpr int interrupt_idx(const char *label)
+{
+    return pic18f66k80_default_interrupt_index(label);
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 2)
@@ -344,9 +349,7 @@ int main(int argc, char **argv)
     int_ctx_t interrupts;
     interrupt_initialize(interrupts);
     interrupts.sfr = pic18f66k80_int_regs;
-
-    pic18f66k80_interrupt_map interrupt;
-    interrupts.sources = pic18f66k80_make_interrupt_sources(interrupt);
+    interrupts.sources = pic18f66k80_make_interrupt_map();
 
     cpu.global_interrupt_enable = [&](bool high_prio, bool enabled) {
         if (high_prio)
@@ -355,34 +358,18 @@ int main(int argc, char **argv)
             interrupts.GIEL = enabled;
     };
 
-    auto on_portb_changed = [&](bool set) {
-        interrupt_set_flag(interrupt.RB, set);
-    };
+    auto on_portb_changed = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("RB")], set); };
 
     gpio_add_change_interrupt(gpiob, 7, on_portb_changed);
     gpio_add_change_interrupt(gpiob, 6, on_portb_changed);
     gpio_add_change_interrupt(gpiob, 5, on_portb_changed);
     gpio_add_change_interrupt(gpiob, 4, on_portb_changed);
 
-    auto on_timer0_overflow = [&](bool set) {
-        interrupt_set_flag(interrupt.TMR0, set);
-    };
-
-    auto on_timer1_overflow = [&](bool set) {
-        interrupt_set_flag(interrupt.TMR1, set);
-    };
-
-    auto on_timer2_match = [&](bool set) {
-        interrupt_set_flag(interrupt.TMR2, set);
-    };
-
-    auto on_timer3_overflow = [&](bool set) {
-        interrupt_set_flag(interrupt.TMR3, set);
-    };
-
-    auto on_timer4_match = [&](bool set) {
-        interrupt_set_flag(interrupt.TMR4, set);
-    };
+    auto on_timer0_overflow = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("TMR0")], set); };
+    auto on_timer1_overflow = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("TMR1")], set); };
+    auto on_timer2_match = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("TMR2")], set); };
+    auto on_timer3_overflow = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("TMR3")], set); };
+    auto on_timer4_match = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("TMR4")], set); };
 
     timer0_t timer0;
     timer1_t timer1;
@@ -402,9 +389,7 @@ int main(int argc, char **argv)
 
     adc_ctx_t adc;
     adc_initialize(adc, pic18f66k80_adc_regs);
-    adc.done_interrupt = [&](bool set) {
-        interrupt_set_flag(interrupt.AD, set);
-    };
+    adc.done_interrupt = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("AD")], set); };
 
     eusart_ctx_t eusart1;
     eusart_ctx_t eusart2;
@@ -424,18 +409,10 @@ int main(int argc, char **argv)
         std::cout << static_cast<char>(data);
         eusart_import_tx_done(eusart2);
     };
-    eusart1.rx_interrupt = [&](bool set) {
-        interrupt_set_flag(interrupt.RC1, set);
-    };
-    eusart2.rx_interrupt = [&](bool set) {
-        interrupt_set_flag(interrupt.RC2, set);
-    };
-    eusart1.tx_interrupt = [&](bool set) {
-        interrupt_set_flag(interrupt.TX1, set);
-    };
-    eusart2.tx_interrupt = [&](bool set) {
-        interrupt_set_flag(interrupt.TX2, set);
-    };
+    eusart1.rx_interrupt = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("RC1")], set); };
+    eusart2.rx_interrupt = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("RC2")], set); };
+    eusart1.tx_interrupt = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("TX1")], set); };
+    eusart2.tx_interrupt = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("TX2")], set); };
 
     auto ccpx_special_event_tigger = [&](uint8_t timer_num, uint8_t ccp_num) {
         if (timer_num == 1)
@@ -462,11 +439,11 @@ int main(int argc, char **argv)
     ccp3.special_event_timer = [&](uint8_t timer_num) { ccpx_special_event_tigger(timer_num, 3); };
     ccp4.special_event_timer = [&](uint8_t timer_num) { ccpx_special_event_tigger(timer_num, 4); };
     ccp5.special_event_timer = [&](uint8_t timer_num) { ccpx_special_event_tigger(timer_num, 5); };
-    ccp1.interrupt = [&](bool set) { interrupt_set_flag(interrupt.CCP1, set); };
-    ccp2.interrupt = [&](bool set) { interrupt_set_flag(interrupt.CCP2, set); };
-    ccp3.interrupt = [&](bool set) { interrupt_set_flag(interrupt.CCP3, set); };
-    ccp4.interrupt = [&](bool set) { interrupt_set_flag(interrupt.CCP4, set); };
-    ccp5.interrupt = [&](bool set) { interrupt_set_flag(interrupt.CCP5, set); };
+    ccp1.interrupt = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("CCP1")], set); };
+    ccp2.interrupt = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("CCP2")], set); };
+    ccp3.interrupt = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("CCP3")], set); };
+    ccp4.interrupt = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("CCP4")], set); };
+    ccp5.interrupt = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("CCP5")], set); };
 
     timer2.output = [&]() {
         ccp_pwm_match_input(ccp1, 2, read_data_bus);
@@ -568,8 +545,7 @@ int main(int argc, char **argv)
         cpu_bus_write(cpu, pic18fxx2_cpu_regs, addr, val);
         bank_bus_write(bank_ctx, addr, val);
         tbl_bus_write(tbl, addr, val);
-        interrupt_bus_write(interrupts, addr, val),
-        gpio_bus_write(gpioa, addr, val);
+        interrupt_bus_write(interrupts, addr, val), gpio_bus_write(gpioa, addr, val);
         gpio_bus_write(gpiob, addr, val);
         gpio_bus_write(gpioc, addr, val);
         gpio_bus_write(gpiod, addr, val);
