@@ -94,14 +94,23 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
               bus_writer_t<uint32_t, uint8_t> write_prog_bus, bus_reader_t<uint16_t, uint8_t> read_data_bus,
               bus_writer_t<uint16_t, uint8_t> write_data_bus, std::function<void(cpu_event_t e)> event_handler)
 {
-    decode_result_t decoded = cpu_decode(cpu.fetched_instruction);
-    uint32_t decoded_addr = cpu.fetched_instruction_addr;
-    instruction_t instruction = decoded.instruction;
+    auto latch_instruction = [&]() {
+        uint8_t fetched_low = read_prog_bus(cpu.pc);
+        uint8_t fetched_high = read_prog_bus(cpu.pc + 1);
+        cpu.fetched_instruction = (static_cast<uint16_t>(fetched_high) << 8) | fetched_low;
+    };
 
-    cpu.fetched_instruction_addr = cpu.pc;
-    uint8_t fetched_low = read_prog_bus(cpu.pc++);
-    uint8_t fetched_high = read_prog_bus(cpu.pc++);
-    cpu.fetched_instruction = (static_cast<uint16_t>(fetched_high) << 8) | fetched_low;
+    if (cpu.flush)
+    {
+        std::cout << "FLUSH\n";
+        latch_instruction();
+        cpu.flush = false;
+        return;
+    }
+
+    decode_result_t decoded = cpu_decode(cpu.fetched_instruction);
+    cpu.pc += 2;
+    instruction_t instruction = decoded.instruction;
 
     if (cpu.next_action != nullptr)
     {
@@ -110,11 +119,11 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         auto tmp = cpu.next_action;
         cpu.next_action = nullptr;
         tmp(cpu, instruction);
-
+        latch_instruction();
         return;
     }
 
-    env_cpu_current_instruction(decoded, decoded_addr);
+    env_cpu_current_instruction(decoded, cpu.pc - 2);
 
     bool xinst = configuration_check_bit(CONFIG::XINST, read_prog_bus);
 
@@ -122,6 +131,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     {
         if (event_handler != nullptr)
             event_handler(cpu_event_t::illegal_instruction);
+        latch_instruction();
         return;
     }
 
@@ -153,7 +163,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             if (!cpu_stack_pop(cpu, read_prog_bus))
                 return;
 
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.flush = true;
         }
 
         break;
@@ -209,7 +219,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         if (cpu.status & alu_status_C)
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.flush = true;
         }
         break;
     }
@@ -226,7 +236,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         if (cpu.status & alu_status_N)
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.flush = true;
         }
         break;
     }
@@ -235,7 +245,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         if (!(cpu.status & alu_status_C))
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.flush = true;
         }
         break;
     }
@@ -244,7 +254,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         if (!(cpu.status & alu_status_N))
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.flush = true;
         }
         break;
     }
@@ -253,7 +263,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         if (!(cpu.status & alu_status_OV))
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.flush = true;
         }
         break;
     }
@@ -262,7 +272,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         if (!(cpu.status & alu_status_Z))
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal) * 2;
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.flush = true;
         }
         break;
     }
@@ -270,7 +280,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
     case opcode_t::BRA: {
         int16_t offset = from_2s_complement_11(instruction.control_branch.literal) * 2;
         cpu.pc += offset - 2;
-        cpu.fetched_instruction = 0x0000; // NOP
+        cpu.flush = true;
         break;
     }
 
@@ -287,7 +297,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         bool is_set = val & (1 << instruction.bit_oriented.bit);
         if (!is_set)
         {
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.pc += 2;
+            cpu.flush = true;
         }
         break;
     }
@@ -297,7 +308,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         bool is_set = val & (1 << instruction.bit_oriented.bit);
         if (is_set)
         {
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.pc += 2;
+            cpu.flush = true;
         }
         break;
     }
@@ -314,7 +326,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         if (cpu.status & alu_status_OV)
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal * 2);
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.flush = true;
         }
         break;
     }
@@ -323,7 +335,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         if (cpu.status & alu_status_Z)
         {
             cpu.pc += from_2s_complement_8(instruction.control_branch_status.literal * 2);
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.flush = true;
         }
         break;
     }
@@ -334,7 +346,11 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             return;
         }
 
-        instruction_t next_instruction = *reinterpret_cast<instruction_t *>(&cpu.fetched_instruction);
+        uint8_t fetched_low = read_prog_bus(cpu.pc);
+        uint8_t fetched_high = read_prog_bus(cpu.pc + 1);
+        uint16_t low_word = (static_cast<uint16_t>(fetched_high) << 8) | fetched_low;
+        instruction_t next_instruction = *reinterpret_cast<instruction_t *>(&low_word);
+
         cpu.pc = (static_cast<uint32_t>(next_instruction.control_call_low.literal << 8) |
                   static_cast<uint32_t>(instruction.control_call_high.literal))
                  << 1;
@@ -346,7 +362,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             cpu.bsrs = read_data_bus(static_cast<uint16_t>(sfr.BSR));
         }
 
-        cpu.fetched_instruction = 0x0000; // NOP
+        cpu.flush = true;
         break;
     }
 
@@ -360,7 +376,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         cpu.pc &= ~0xFF;
         cpu.pc |= cpu.wreg;
 
-        cpu.fetched_instruction = 0x0000; // NOP
+        cpu.flush = true;
         break;
     }
 
@@ -396,7 +412,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         if (val == cpu.wreg)
         {
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.pc += 2;
+            cpu.flush = true;
         }
         break;
     }
@@ -405,7 +422,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         if (val > cpu.wreg)
         {
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.pc += 2;
+            cpu.flush = true;
         }
         break;
     }
@@ -414,7 +432,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         if (val < cpu.wreg)
         {
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.pc += 2;
+            cpu.flush = true;
         }
         break;
     }
@@ -449,7 +468,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
         if (result == 0)
         {
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.pc += 2;
+            cpu.flush = true;
         }
         break;
     }
@@ -466,18 +486,23 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
         if (result != 0)
         {
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.pc += 2;
+            cpu.flush = true;
         }
         break;
     }
 
     case opcode_t::GOTO: {
-        instruction_t next_instruction = *reinterpret_cast<instruction_t *>(&cpu.fetched_instruction);
-        cpu.fetched_instruction = 0x0000; // NOP
+        uint8_t fetched_low = read_prog_bus(cpu.pc);
+        uint8_t fetched_high = read_prog_bus(cpu.pc + 1);
+        uint16_t low_word = (static_cast<uint16_t>(fetched_high) << 8) | fetched_low;
+        instruction_t next_instruction = *reinterpret_cast<instruction_t *>(&low_word);
+
         uint32_t address = ((static_cast<uint32_t>(next_instruction.control_goto_low.literal) << 8) |
                             instruction.control_goto_high.literal)
                            << 1;
         cpu.pc = address;
+        cpu.flush = true;
         break;
     }
 
@@ -505,7 +530,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
         if (result == 0)
         {
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.pc += 2;
+            cpu.flush = true;
         }
         break;
     }
@@ -522,7 +548,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
         if (result != 0)
         {
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.pc += 2;
+            cpu.flush = true;
         }
         break;
     }
@@ -707,7 +734,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         }
 
         cpu.pc += 2 + from_2s_complement_11(instruction.control_branch.literal) * 2;
-        cpu.fetched_instruction = 0xFFFF; // NOP
+        cpu.flush = true;
         break;
     }
 
@@ -730,7 +757,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             write_data_bus(static_cast<uint16_t>(sfr.BSR), cpu.bsrs);
         }
 
-        cpu.fetched_instruction = 0x0000; // NOP
+        cpu.flush = true;
         break;
     }
 
@@ -740,7 +767,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         if (!cpu_stack_pop(cpu, read_prog_bus))
             return;
 
-        cpu.fetched_instruction = 0x0000; // NOP
+        cpu.flush = true;
         break;
     }
 
@@ -756,7 +783,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             write_data_bus(static_cast<uint16_t>(sfr.BSR), cpu.bsrs);
         }
 
-        cpu.fetched_instruction = 0x0000; // NOP
+        cpu.flush = true;
         break;
     }
 
@@ -850,7 +877,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             if (!cpu_stack_pop(cpu, read_prog_bus))
                 return;
 
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.flush = true;
         }
 
         break;
@@ -947,7 +974,8 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
         uint8_t val = read_bus(sfr, read_data_bus, instruction.byte_oriented.f, instruction.byte_oriented.a, xinst);
         if (val == 0)
         {
-            cpu.fetched_instruction = 0x0000; // NOP
+            cpu.pc += 2;
+            cpu.flush = true;
         }
         break;
     }
@@ -971,12 +999,14 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     default: break;
     }
+
+    latch_instruction();
 }
 
 void cpu_reset_por(cpu_t &cpu)
 {
     cpu.fetched_instruction = 0;
-    cpu.fetched_instruction_addr = 0xFFFFFFFF;
+    cpu.flush = true;
     cpu.pc = 0;
     cpu.pclath = 0;
     cpu.pclatu = 0;
@@ -1239,7 +1269,7 @@ void cpu_interrupt_vector(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<
 
     uint32_t int_vector = high_priority ? 0x8 : 0x18;
 
-    cpu.fetched_instruction = 0x0000; // NOP
+    cpu.fetched_instruction = 0x0000;
     cpu.pc = int_vector;
 }
 
