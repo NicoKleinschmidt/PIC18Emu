@@ -38,6 +38,10 @@ struct bank_ctx_t
     uint16_t fsr1;
     uint16_t fsr2;
 
+    uint16_t fsr0_new;
+    uint16_t fsr1_new;
+    uint16_t fsr2_new;
+
     bank_known_sfrs_t sfr;
     std::function<uint8_t()> read_wreg;
     bus_reader_t<uint16_t, uint8_t> read_bus;
@@ -47,3 +51,4 @@ struct bank_ctx_t
 void bank_initialize(bank_ctx_t &ctx);
 addr_read_result_t bank_bus_read(bank_ctx_t &ctx, uint16_t addr);
 addr_bit_mask_t bank_bus_write(bank_ctx_t &ctx, uint16_t addr, uint8_t val);
+void bank_tick(bank_ctx_t &ctx);

@@ -200,8 +200,7 @@ struct instruction_t
 struct cpu_t
 {
     uint16_t fetched_instruction;
-    // Address of the fetched instruction, for debugging.
-    uint32_t fetched_instruction_addr;
+    bool flush;
 
     /// If an operation requires multiple clock cycles, it sets the next_action function.
     /// This will cause the function to be executed instead of the next instruction.

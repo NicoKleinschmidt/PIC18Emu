@@ -57,11 +57,11 @@ static uint16_t get_fsr_address(bank_ctx_t &ctx, uint8_t fsr_num, fsr_action act
     }
 
     if (fsr_num == 0)
-        fsr_value = ctx.fsr0;
+        ctx.fsr0_new = fsr_value;
     else if (fsr_num == 1)
-        fsr_value = ctx.fsr1;
+        ctx.fsr1_new = fsr_value;
     else if (fsr_num == 2)
-        fsr_value = ctx.fsr2;
+        ctx.fsr2_new = fsr_value;
 
     return retval;
 }
@@ -83,6 +83,9 @@ void bank_initialize(bank_ctx_t &ctx)
     ctx.fsr0 = 0;
     ctx.fsr1 = 0;
     ctx.fsr2 = 0;
+    ctx.fsr0_new = 0;
+    ctx.fsr1_new = 0;
+    ctx.fsr2_new = 0;
 }
 
 addr_read_result_t bank_bus_read(bank_ctx_t &ctx, uint16_t address)
@@ -153,13 +156,44 @@ addr_bit_mask_t bank_bus_write(bank_ctx_t &ctx, uint16_t address, uint8_t value)
     else if (address == ctx.sfr.PLUSW1) indirect_write(1, fsr_action::plusw, value);
     else if (address == ctx.sfr.PLUSW2) indirect_write(2, fsr_action::plusw, value);
     else if (address == ctx.sfr.BSR) ctx.bsr = value;
-    else if (address == ctx.sfr.FSR0H) ctx.fsr0 = (ctx.fsr0 & 0x00FF) | ((value & 0x0F) << 8);
-    else if (address == ctx.sfr.FSR0L) ctx.fsr0 = (ctx.fsr0 & 0xFF00) | value;
-    else if (address == ctx.sfr.FSR1H) ctx.fsr1 = (ctx.fsr1 & 0x00FF) | ((value & 0x0F) << 8);
-    else if (address == ctx.sfr.FSR1L) ctx.fsr1 = (ctx.fsr1 & 0xFF00) | value;
-    else if (address == ctx.sfr.FSR2H) ctx.fsr2 = (ctx.fsr2 & 0x00FF) | ((value & 0x0F) << 8);
-    else if (address == ctx.sfr.FSR2L) ctx.fsr2 = (ctx.fsr2 & 0xFF00) | value;
     // clang-format on
+    else if (address == ctx.sfr.FSR0H)
+    {
+        ctx.fsr0 = (ctx.fsr0 & 0x00FF) | ((value & 0x0F) << 8);
+        ctx.fsr0_new = ctx.fsr0;
+    }
+    else if (address == ctx.sfr.FSR0L)
+    {
+        ctx.fsr0 = (ctx.fsr0 & 0xFF00) | value;
+        ctx.fsr0_new = ctx.fsr0;
+    }
+    else if (address == ctx.sfr.FSR1H)
+    {
+        ctx.fsr1 = (ctx.fsr1 & 0x00FF) | ((value & 0x0F) << 8);
+        ctx.fsr1_new = ctx.fsr1;
+    }
+    else if (address == ctx.sfr.FSR1L)
+    {
+        ctx.fsr1 = (ctx.fsr1 & 0xFF00) | value;
+        ctx.fsr1_new = ctx.fsr1;
+    }
+    else if (address == ctx.sfr.FSR2H)
+    {
+        ctx.fsr2 = (ctx.fsr2 & 0x00FF) | ((value & 0x0F) << 8);
+        ctx.fsr2_new = ctx.fsr2;
+    }
+    else if (address == ctx.sfr.FSR2L)
+    {
+        ctx.fsr2 = (ctx.fsr2 & 0xFF00) | value;
+        ctx.fsr2_new = ctx.fsr2;
+    }
 
     return 0xFF;
+}
+
+void bank_tick(bank_ctx_t &ctx)
+{
+    ctx.fsr0 = ctx.fsr0_new;
+    ctx.fsr1 = ctx.fsr1_new;
+    ctx.fsr2 = ctx.fsr2_new;
 }

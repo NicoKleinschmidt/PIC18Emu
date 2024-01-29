@@ -142,7 +142,7 @@ constexpr std::vector<int_source_t> pic18f66k80_make_interrupt_map()
         int_make_source("INT2", a(REG::INTCON3), 4, a(REG::INTCON3), 1, a(REG::INTCON3), 7),
         int_make_source("INT3", a(REG::INTCON3), 5, a(REG::INTCON3), 2, a(REG::INTCON2), 1),
         int_make_source("RB", a(REG::INTCON), 3, a(REG::INTCON), 0, a(REG::INTCON2), 0),
-        int_make_source("TMR0", a(REG::INTCON), 7, a(REG::INTCON), 2, a(REG::INTCON2), 2),
+        int_make_source("TMR0", a(REG::INTCON), 5, a(REG::INTCON), 2, a(REG::INTCON2), 2),
         int_make_source("TMR1", a(REG::PIE1), 0, a(REG::PIR1), 0, a(REG::IPR1), 0, peripheral),
         int_make_source("TMR1G", a(REG::PIE1), 2, a(REG::PIR1), 2, a(REG::IPR1), 2, peripheral),
         int_make_source("TMR2", a(REG::PIE1), 1, a(REG::PIR1), 1, a(REG::IPR1), 1, peripheral),
