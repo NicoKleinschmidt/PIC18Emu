@@ -102,7 +102,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     if (cpu.flush)
     {
-        std::cout << "FLUSH\n";
+        std::cerr << "CPU: FLUSH\n";
         latch_instruction();
         cpu.flush = false;
         return;
@@ -607,7 +607,6 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::MOVFF: {
         uint8_t val = read_data_bus(instruction.byte_to_byte_high.f_source);
-        cpu.pc -= 2;
         cpu.next_action = [val, write_data_bus, sfr](cpu_t &, instruction_t &instruction) {
             uint16_t dest = instruction.byte_to_byte_low.f_dest;
             if (dest == static_cast<uint16_t>(sfr.PCL) || dest == static_cast<uint16_t>(sfr.TOSU) ||

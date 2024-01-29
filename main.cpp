@@ -606,8 +606,10 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    for (int i = 0; program_file.peek() != -1; i++)
+    for (size_t i = 0; program_file.peek() != -1; i++)
     {
+        if (i >= program_mem->size())
+            break;
         (*program_mem)[i] = program_file.get();
     }
 
@@ -779,6 +781,7 @@ int main(int argc, char **argv)
         if (stop)
             break;
 
+        bank_tick(bank_ctx);
         interrupt_tick(interrupts);
         timer0_tick(timer0, read_data_bus);
         timer1_tick(timer1, read_data_bus);
