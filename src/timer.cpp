@@ -56,7 +56,7 @@ addr_bit_mask_t timer0_bus_write(timer0_t &timer, const timer0_known_sfrs_t &sfr
     if (addr == sfr.T0CON)
     {
         timer.prescaler = static_cast<timer0_prescaler_t>(value & 0b111);
-        timer.enable_prescaler = value & (1 << 3);
+        timer.enable_prescaler = !(value & (1 << 3));
         timer.external_clock_falling_edge = value & (1 << 4);
         timer.use_external_clock = value & (1 << 5);
         timer.use_16_bit = !(value & (1 << 6));
