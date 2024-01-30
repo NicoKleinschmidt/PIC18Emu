@@ -74,7 +74,7 @@ static void timer0_tick(timer0_t &timer)
     if (!timer.enable)
         return;
 
-    uint8_t div = 2 << static_cast<uint8_t>(timer.prescaler);
+    uint_fast16_t div = 2 << static_cast<uint8_t>(timer.prescaler);
     if (timer.enable_prescaler && timer.prescaler_tick_counter % div != 0)
         return;
 
@@ -212,7 +212,7 @@ static void timer1_tick(timer1_t &timer)
     if (!timer.enable)
         return;
 
-    uint8_t div = 1 << static_cast<uint8_t>(timer.prescaler);
+    uint_fast16_t div = 1 << static_cast<uint8_t>(timer.prescaler);
     if (timer.prescaler_tick_counter % div != 0)
         return;
 
@@ -317,7 +317,7 @@ void timer2_tick(timer2_t &timer, bus_reader_t<uint16_t, uint8_t> read_bus)
     if (!timer.enable)
         return;
 
-    uint8_t div = 1 << static_cast<uint8_t>(timer.prescaler);
+    uint_fast16_t div = 1 << static_cast<uint8_t>(timer.prescaler);
     if (timer.prescaler_tick_counter % div != 0)
         return;
 
@@ -438,7 +438,7 @@ static void timer3_tick(timer3_t &timer)
     if (!timer.enable)
         return;
 
-    uint8_t div = 1 << static_cast<uint8_t>(timer.prescaler);
+    uint_fast16_t div = 1 << static_cast<uint8_t>(timer.prescaler);
     if (timer.prescaler_tick_counter % div != 0)
         return;
 

@@ -279,7 +279,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
 
     case opcode_t::BRA: {
         int16_t offset = from_2s_complement_11(instruction.control_branch.literal) * 2;
-        cpu.pc += offset - 2;
+        cpu.pc += offset;
         cpu.flush = true;
         break;
     }
@@ -732,7 +732,7 @@ void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, ui
             return;
         }
 
-        cpu.pc += 2 + from_2s_complement_11(instruction.control_branch.literal) * 2;
+        cpu.pc += from_2s_complement_11(instruction.control_branch.literal) * 2;
         cpu.flush = true;
         break;
     }
@@ -1268,7 +1268,7 @@ void cpu_interrupt_vector(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<
 
     uint32_t int_vector = high_priority ? 0x8 : 0x18;
 
-    cpu.fetched_instruction = 0x0000;
+    cpu.flush = true;
     cpu.pc = int_vector;
 }
 
