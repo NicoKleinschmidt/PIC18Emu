@@ -72,7 +72,7 @@ struct ccp_ctx_t
 addr_read_result_t ccp_bus_read(ccp_ctx_t &ctx, uint16_t address);
 addr_bit_mask_t ccp_bus_write(ccp_ctx_t &ctx, uint16_t address, uint8_t value);
 void ccp_tick(ccp_ctx_t &ctx, bus_reader_t<uint16_t, uint8_t> read_bus);
-void ccp_pwm_match_input(ccp_ctx_t &ctx, uint8_t timer_num, bus_reader_t<uint16_t, uint8_t> read_bus);
+void ccp_pwm_match_input(ccp_ctx_t &ctx, uint8_t timer_num);
 void ccp_pin_input(ccp_ctx_t &ctx, bool high, bus_reader_t<uint16_t, uint8_t> read_bus);
 void ccp_can_msg_received(ccp_ctx_t &ctx, bus_reader_t<uint16_t, uint8_t> read_bus);
 void ccp_initialize(ccp_ctx_t &ctx, uint8_t ccp_num, const ccp_known_sfrs_t &sfrs);

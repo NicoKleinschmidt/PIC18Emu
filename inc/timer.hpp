@@ -144,29 +144,29 @@ struct timer3_t
 
 addr_read_result_t timer0_bus_read(timer0_t &timer, const timer0_known_sfrs_t &sfr, uint16_t addr);
 addr_bit_mask_t timer0_bus_write(timer0_t &timer, const timer0_known_sfrs_t &sfr, uint16_t addr, uint8_t value);
-void timer0_tick(timer0_t &timer, bus_reader_t<uint16_t, uint8_t> read_bus);
-void timer0_external_clock_input(timer0_t &timer, bool level_high, bus_reader_t<uint16_t, uint8_t> read_bus);
+void timer0_tick_fosc(timer0_t &timer);
+void timer0_external_clock_input(timer0_t &timer, bool level_high);
 void timer0_reset(timer0_t &timer);
 void timer0_initialize(timer0_t &timer);
 
 addr_read_result_t timer1_bus_read(timer1_t &timer, const timer1_known_sfrs_t &sfr, uint16_t addr);
 addr_bit_mask_t timer1_bus_write(timer1_t &timer, const timer1_known_sfrs_t &sfr, uint16_t addr, uint8_t value);
-void timer1_tick(timer1_t &timer, bus_reader_t<uint16_t, uint8_t> read_bus);
-void timer1_external_clock_input(timer1_t &timer, bool level_high, bus_reader_t<uint16_t, uint8_t> read_bus);
+void timer1_tick_fosc(timer1_t &timer);
+void timer1_external_clock_input(timer1_t &timer, bool level_high);
 void timer1_special_event_trigger(timer1_t &timer);
 void timer1_reset(timer1_t &timer);
 void timer1_initialize(timer1_t &timer);
 
 addr_read_result_t timer2_bus_read(timer2_t &timer, const timer2_4_known_sfrs_t &sfr, uint16_t addr);
 addr_bit_mask_t timer2_bus_write(timer2_t &timer, const timer2_4_known_sfrs_t &sfr, uint16_t addr, uint8_t value);
-void timer2_tick(timer2_t &timer, bus_reader_t<uint16_t, uint8_t> read_bus);
+void timer2_tick_fosc(timer2_t &timer);
 void timer2_reset(timer2_t &timer);
 void timer2_initialize(timer2_t &timer);
 
 addr_read_result_t timer3_bus_read(timer3_t &timer, const timer3_known_sfrs_t &sfr, uint16_t addr);
 addr_bit_mask_t timer3_bus_write(timer3_t &timer, const timer3_known_sfrs_t &sfr, uint16_t addr, uint8_t value);
-void timer3_tick(timer3_t &timer, bus_reader_t<uint16_t, uint8_t> read_bus);
-void timer3_external_clock_input(timer3_t &timer, bool level_high, bus_reader_t<uint16_t, uint8_t> read_bus);
+void timer3_tick_fosc(timer3_t &timer);
+void timer3_external_clock_input(timer3_t &timer, bool level_high);
 void timer3_special_event_trigger(timer3_t &timer);
 void timer3_reset(timer3_t &timer);
 void timer3_initialize(timer3_t &timer);

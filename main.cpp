@@ -446,19 +446,19 @@ int main(int argc, char **argv)
     ccp5.interrupt = [&](bool set) { interrupt_set_flag(interrupts.sources[interrupt_idx("CCP5")], set); };
 
     timer2.output = [&]() {
-        ccp_pwm_match_input(ccp1, 2, read_data_bus);
-        ccp_pwm_match_input(ccp2, 2, read_data_bus);
-        ccp_pwm_match_input(ccp3, 2, read_data_bus);
-        ccp_pwm_match_input(ccp4, 2, read_data_bus);
-        ccp_pwm_match_input(ccp5, 2, read_data_bus);
+        ccp_pwm_match_input(ccp1, 2);
+        ccp_pwm_match_input(ccp2, 2);
+        ccp_pwm_match_input(ccp3, 2);
+        ccp_pwm_match_input(ccp4, 2);
+        ccp_pwm_match_input(ccp5, 2);
     };
 
     timer4.output = [&]() {
-        ccp_pwm_match_input(ccp1, 4, read_data_bus);
-        ccp_pwm_match_input(ccp2, 4, read_data_bus);
-        ccp_pwm_match_input(ccp3, 4, read_data_bus);
-        ccp_pwm_match_input(ccp4, 4, read_data_bus);
-        ccp_pwm_match_input(ccp5, 4, read_data_bus);
+        ccp_pwm_match_input(ccp1, 4);
+        ccp_pwm_match_input(ccp2, 4);
+        ccp_pwm_match_input(ccp3, 4);
+        ccp_pwm_match_input(ccp4, 4);
+        ccp_pwm_match_input(ccp5, 4);
     };
 
     tbl_ctx_t tbl;
@@ -783,11 +783,11 @@ int main(int argc, char **argv)
 
         bank_tick(bank_ctx);
         interrupt_tick(interrupts);
-        timer0_tick(timer0, read_data_bus);
-        timer1_tick(timer1, read_data_bus);
-        timer2_tick(timer2, read_data_bus);
-        timer3_tick(timer3, read_data_bus);
-        timer2_tick(timer4, read_data_bus);
+        timer0_tick_fosc(timer0);
+        timer1_tick_fosc(timer1);
+        timer2_tick_fosc(timer2);
+        timer3_tick_fosc(timer3);
+        timer2_tick_fosc(timer4);
         ccp_tick(ccp1, read_data_bus);
         ccp_tick(ccp2, read_data_bus);
         ccp_tick(ccp3, read_data_bus);
@@ -797,10 +797,8 @@ int main(int argc, char **argv)
 
         if (!sleep)
         {
-            cpu_tick(cpu, pic18fxx2_cpu_regs, read_prog_bus, write_prog_bus, read_data_bus, write_data_bus, events);
+            cpu_tick(cpu, pic18fxx2_cpu_regs, read_prog_bus, read_data_bus, write_data_bus, events);
         }
-
-        // sleep_us(1000);
     }
 
     auto end = std::chrono::steady_clock::now();

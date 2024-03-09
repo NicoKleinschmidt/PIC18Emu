@@ -90,6 +90,9 @@ enum class opcode_t : uint8_t
     SUBULNK,
 };
 
+#pragma GCC diagnostic push 
+#pragma GCC diagnostic ignored "-Wnested-anon-types"
+
 struct instruction_t
 {
     union {
@@ -197,6 +200,8 @@ struct instruction_t
     };
 };
 
+#pragma GCC diagnostic pop
+
 struct cpu_t
 {
     uint16_t fetched_instruction;
@@ -272,8 +277,8 @@ enum class cpu_event_t
 };
 
 void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &regs, bus_reader_t<uint32_t, uint8_t> read_prog_bus,
-              bus_writer_t<uint32_t, uint8_t> write_prog_bus, bus_reader_t<uint16_t, uint8_t> read_data_bus,
-              bus_writer_t<uint16_t, uint8_t> write_data_bus, std::function<void(cpu_event_t e)> event_handler);
+              bus_reader_t<uint16_t, uint8_t> read_data_bus, bus_writer_t<uint16_t, uint8_t> write_data_bus,
+              std::function<void(cpu_event_t e)> event_handler);
 
 void cpu_reset_por(cpu_t &cpu);
 
@@ -301,5 +306,3 @@ void cpu_interrupt_vector(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<
 
 addr_read_result_t cpu_bus_read(cpu_t &cpu, const cpu_known_sfrs_t &regs, uint16_t address);
 addr_bit_mask_t cpu_bus_write(cpu_t &cpu, const cpu_known_sfrs_t &regs, uint16_t address, uint8_t value);
-
-void test_2s_complement();

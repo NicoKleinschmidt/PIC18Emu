@@ -89,7 +89,7 @@ static void timer0_tick(timer0_t &timer)
     }
 }
 
-void timer0_tick(timer0_t &timer, bus_reader_t<uint16_t, uint8_t> read_bus)
+void timer0_tick_fosc(timer0_t &timer)
 {
     if (timer.use_external_clock)
         return;
@@ -97,7 +97,7 @@ void timer0_tick(timer0_t &timer, bus_reader_t<uint16_t, uint8_t> read_bus)
     timer0_tick(timer);
 }
 
-void timer0_external_clock_input(timer0_t &timer, bool level_high, bus_reader_t<uint16_t, uint8_t> read_bus)
+void timer0_external_clock_input(timer0_t &timer, bool level_high)
 {
     if (!timer.use_external_clock || level_high == timer.external_clock_falling_edge)
         return;
@@ -105,8 +105,9 @@ void timer0_external_clock_input(timer0_t &timer, bool level_high, bus_reader_t<
     timer0_tick(timer);
 }
 
-void timer0_reset(timer0_t &timer)
+void timer0_reset(timer0_t &)
 {
+    // TODO:
 }
 
 void timer0_initialize(timer0_t &timer)
@@ -224,7 +225,7 @@ static void timer1_tick(timer1_t &timer)
     }
 }
 
-void timer1_tick(timer1_t &timer, bus_reader_t<uint16_t, uint8_t> read_bus)
+void timer1_tick_fosc(timer1_t &timer)
 {
     if (timer.use_external_clock)
         return;
@@ -232,7 +233,7 @@ void timer1_tick(timer1_t &timer, bus_reader_t<uint16_t, uint8_t> read_bus)
     timer1_tick(timer);
 }
 
-void timer1_external_clock_input(timer1_t &timer, bool level_high, bus_reader_t<uint16_t, uint8_t> read_bus)
+void timer1_external_clock_input(timer1_t &timer, bool level_high)
 {
     if (!timer.use_external_clock || !level_high)
         return;
@@ -245,8 +246,9 @@ void timer1_special_event_trigger(timer1_t &timer)
     timer.counter = 0;
 }
 
-void timer1_reset(timer1_t &timer)
+void timer1_reset(timer1_t &)
 {
+    // TODO:
 }
 
 void timer1_initialize(timer1_t &timer)
@@ -310,7 +312,7 @@ addr_bit_mask_t timer2_bus_write(timer2_t &timer, const timer2_4_known_sfrs_t &s
     return 0x00;
 }
 
-void timer2_tick(timer2_t &timer, bus_reader_t<uint16_t, uint8_t> read_bus)
+void timer2_tick_fosc(timer2_t &timer)
 {
     timer.prescaler_tick_counter++;
 
@@ -450,7 +452,7 @@ static void timer3_tick(timer3_t &timer)
     }
 }
 
-void timer3_tick(timer3_t &timer, bus_reader_t<uint16_t, uint8_t> read_bus)
+void timer3_tick_fosc(timer3_t &timer)
 {
     if (timer.use_external_clock)
         return;
@@ -458,7 +460,7 @@ void timer3_tick(timer3_t &timer, bus_reader_t<uint16_t, uint8_t> read_bus)
     timer3_tick(timer);
 }
 
-void timer3_external_clock_input(timer3_t &timer, bool level_high, bus_reader_t<uint16_t, uint8_t> read_bus)
+void timer3_external_clock_input(timer3_t &timer, bool level_high)
 {
     if (!timer.use_external_clock || !level_high)
         return;
@@ -471,8 +473,9 @@ void timer3_special_event_trigger(timer3_t &timer)
     timer.counter = 0;
 }
 
-void timer3_reset(timer3_t &timer)
+void timer3_reset(timer3_t &)
 {
+    // TODO:
 }
 
 void timer3_initialize(timer3_t &timer)

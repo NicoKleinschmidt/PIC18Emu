@@ -17,25 +17,6 @@ static int16_t from_2s_complement_11(uint16_t val)
     return static_cast<int16_t>(val) - ((val & (1 << 10)) << 1);
 }
 
-void test_2s_complement()
-{
-    uint16_t minus_one = 0b11111111111;
-    int16_t result = from_2s_complement_11(minus_one);
-    std::cout << "-1 = " << result << "\n";
-
-    uint16_t one = 0b1;
-    result = from_2s_complement_11(one);
-    std::cout << "1 = " << result << "\n";
-
-    uint16_t minus_two = 0b11111111110;
-    result = from_2s_complement_11(minus_two);
-    std::cout << "-2 = " << result << "\n";
-
-    uint16_t two = 0b10;
-    result = from_2s_complement_11(two);
-    std::cout << "2 = " << result << "\n";
-}
-
 static uint16_t get_fsr2(const cpu_known_sfrs_t &sfr, bus_reader_t<uint16_t, uint8_t> read_bus)
 {
     uint8_t low = read_bus(sfr.FSR2L);
@@ -91,8 +72,8 @@ static void write_bus(const cpu_known_sfrs_t &sfr, bus_writer_t<uint16_t, uint8_
 }
 
 void cpu_tick(cpu_t &cpu, const cpu_known_sfrs_t &sfr, bus_reader_t<uint32_t, uint8_t> read_prog_bus,
-              bus_writer_t<uint32_t, uint8_t> write_prog_bus, bus_reader_t<uint16_t, uint8_t> read_data_bus,
-              bus_writer_t<uint16_t, uint8_t> write_data_bus, std::function<void(cpu_event_t e)> event_handler)
+              bus_reader_t<uint16_t, uint8_t> read_data_bus, bus_writer_t<uint16_t, uint8_t> write_data_bus,
+              std::function<void(cpu_event_t e)> event_handler)
 {
     auto latch_instruction = [&]() {
         uint8_t fetched_low = read_prog_bus(cpu.pc);
@@ -1014,8 +995,9 @@ void cpu_reset_por(cpu_t &cpu)
     cpu.stkunf = false;
 }
 
-void cpu_reset_mclr(cpu_t &cpu)
+void cpu_reset_mclr(cpu_t &)
 {
+    // TODO:
 }
 
 decode_result_t cpu_decode(uint16_t instruction)

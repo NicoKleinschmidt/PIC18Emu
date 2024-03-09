@@ -144,7 +144,7 @@ void ccp_tick(ccp_ctx_t &ctx, bus_reader_t<uint16_t, uint8_t> read_bus)
         handle_pwm_tick(ctx, read_bus);
 }
 
-void ccp_pwm_match_input(ccp_ctx_t &ctx, uint8_t timer_num, bus_reader_t<uint16_t, uint8_t> read_bus)
+void ccp_pwm_match_input(ccp_ctx_t &ctx, uint8_t timer_num)
 {
     if (!is_pwm_mode(ctx.mode))
         return;
@@ -290,6 +290,7 @@ void ccp_initialize(ccp_ctx_t &ctx, uint8_t ccp_num, const ccp_known_sfrs_t &sfr
     ctx.known_sfrs = sfrs;
 }
 
-void ccp_reset(ccp_ctx_t &ctx)
+void ccp_reset(ccp_ctx_t &)
 {
+    // TODO:
 }
